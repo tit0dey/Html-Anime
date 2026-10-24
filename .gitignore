@@ -1,18 +1,24 @@
+# Dependencies & build caches
+node_modules/
+dist/
+.vite/
+.cache/
+
+# Android intermediate build outputs
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
 *.iml
-.gradle
-.kotlin
-/local.properties
-/.idea/caches
-/.idea/libraries
-/.idea/modules.xml
-/.idea/workspace.xml
-/.idea/navEditor.xml
-/.idea/assetWizardSettings.xml
-.DS_Store
-/build
-/captures
-.externalNativeBuild
-.cxx
-local.properties
+*.jks
+*.keystore
+
+# Keep the ready-to-install APK inside apk/ for direct phone download!
+!apk/
+!apk/*.apk
+
+# Environment & OS files
 .env
-debug.keystore
+.env.local
+.DS_Store
+Thumbs.db

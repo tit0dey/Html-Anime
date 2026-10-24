@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="512" y2="512" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#070A16"/>
+      <stop offset="50%" stop-color="#140E36"/>
+      <stop offset="100%" stop-color="#061A2C"/>
+    </linearGradient>
+    <linearGradient id="brain" x1="96" y1="96" x2="416" y2="416" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#A855F7"/>
+      <stop offset="50%" stop-color="#6366F1"/>
+      <stop offset="100%" stop-color="#06B6D4"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="118" fill="url(#bg)"/>
+  <circle cx="256" cy="256" r="182" stroke="url(#brain)" stroke-width="10" stroke-dasharray="36 18" opacity="0.6"/>
+  <!-- Left & Right Neural Brain Hemispheres -->
+  <path d="M242 132C198 132 166 158 160 196C134 206 120 232 124 262C128 292 146 312 166 320C170 356 202 380 242 380V132Z" stroke="url(#brain)" stroke-width="18" stroke-linecap="round" stroke-linejoin="round" fill="rgba(139,92,246,0.16)"/>
+  <path d="M270 132C314 132 346 158 352 196C378 206 392 232 388 262C384 292 366 312 346 320C342 356 310 380 270 380V132Z" stroke="url(#brain)" stroke-width="18" stroke-linecap="round" stroke-linejoin="round" fill="rgba(6,182,212,0.16)"/>
+  <!-- Synaptic Nodes -->
+  <circle cx="204" cy="212" r="12" fill="#22D3EE"/>
+  <circle cx="308" cy="212" r="12" fill="#C084FC"/>
+  <circle cx="192" cy="288" r="12" fill="#A855F7"/>
+  <circle cx="320" cy="288" r="12" fill="#22D3EE"/>
+  <circle cx="256" cy="252" r="22" fill="#F8FAFC"/>
+  <line x1="204" y1="212" x2="256" y2="252" stroke="#E2E8F0" stroke-width="6" opacity="0.7"/>
+  <line x1="308" y1="212" x2="256" y2="252" stroke="#E2E8F0" stroke-width="6" opacity="0.7"/>
+  <line x1="192" y1="288" x2="256" y2="252" stroke="#E2E8F0" stroke-width="6" opacity="0.7"/>
+  <line x1="320" y1="288" x2="256" y2="252" stroke="#E2E8F0" stroke-width="6" opacity="0.7"/>
+</svg>
