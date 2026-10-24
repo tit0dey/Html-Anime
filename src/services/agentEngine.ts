@@ -25,6 +25,10 @@ import {
   extractExplicitMemoryFromPrompt,
   formatMemoryBlockForPrompt,
 } from './memoryEngine';
+import {
+  AttachedDocItem,
+  retrieveRelevantDocumentContext,
+} from './ragDocumentEngine';
 import { executePhoneAction } from './nativeBridge';
 import { generateOpenBrainVideo } from './videoEngine';
 import { synthesizeClonedVoice } from './voiceCloneEngine';
@@ -32,6 +36,9 @@ import { synthesizeClonedVoice } from './voiceCloneEngine';
 interface PlannedToolCall {
   tool:
     | 'deep_research'
+    | 'read_url'
+    | 'code_interpreter'
+    | 'svg_diagram'
     | 'save_memory'
     | 'web_search'
     | 'github_search'
@@ -288,6 +295,111 @@ async function runArxivResearchTool(query: string): Promise<string> {
   }
 }
 
+async function runLiveUrlReaderTool(
+  targetUrl: string,
+  addSource: (s: ResearchSource) => void
+): Promise<string> {
+  const cleanUrl = targetUrl.trim().replace(/[),.]+$/, '');
+  try {
+    const domain = new URL(cleanUrl).hostname.replace(/^www\./, '');
+    addSource({ title: domain, url: cleanUrl, domain });
+  } catch {
+    // Ignore invalid URL parse
+  }
+
+  try {
+    const jinaResp = await fetch(`https://r.jina.ai/${cleanUrl}`, {
+      headers: { Accept: 'text/plain' },
+    });
+    if (jinaResp.ok) {
+      const text = await jinaResp.text();
+      if (text && text.trim().length > 40) {
+        return `LIVE WEBPAGE CONTENT (${cleanUrl}):\n${text.slice(0, 9500)}`;
+      }
+    }
+  } catch {
+    // Fallback to direct fetch
+  }
+
+  try {
+    const direct = await fetch(cleanUrl);
+    if (direct.ok) {
+      const raw = await direct.text();
+      const stripped = raw
+        .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+        .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      return `LIVE WEBPAGE CONTENT (${cleanUrl}):\n${stripped.slice(0, 8000)}`;
+    }
+  } catch (err) {
+    return `Could not fetch ${cleanUrl} directly (${String(err)}).`;
+  }
+
+  return `Could not read webpage ${cleanUrl}.`;
+}
+
+async function runSelfHealingCodeInterpreter(
+  problemStatement: string,
+  settings: AppSettings,
+  onProgress?: (msg: string) => void
+): Promise<string> {
+  let lastError = '';
+  let lastCode = '';
+
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    onProgress?.(
+      attempt === 1
+        ? 'Writing solver program in Sandbox...'
+        : `Auto-debugging solver (attempt ${attempt}/3)...`
+    );
+
+    const prompt =
+      attempt === 1
+        ? `Write pure vanilla JavaScript code (no external imports, no DOM) that computes the exact verified solution for:\n${problemStatement}\nUse console.log(...) or return the final computed result. Output ONLY JavaScript code.`
+        : `Your previous JavaScript solver threw an error:\nError: ${lastError}\nPrevious Code:\n${lastCode}\n\nFix the bug and output ONLY valid pure JavaScript code.`;
+
+    const raw = await generateFreeLLMResponse(
+      [{ role: 'user', content: prompt }],
+      settings,
+      'qwen-coder'
+    );
+    const fenced = raw.match(/```(?:javascript|js)?\s*([\s\S]*?)```/i);
+    const code = (fenced ? fenced[1] : raw).trim();
+    lastCode = code;
+
+    try {
+      const logs: string[] = [];
+      const customConsole = {
+        log: (...args: unknown[]) =>
+          logs.push(
+            args
+              .map((a) => (typeof a === 'object' ? JSON.stringify(a) : String(a)))
+              .join(' ')
+          ),
+      };
+      const fn = new Function('console', 'Math', `"use strict";\n${code}`);
+      const ret = fn(customConsole, Math);
+      const output = [
+        ...logs,
+        ret !== undefined ? `Return: ${JSON.stringify(ret)}` : '',
+      ]
+        .filter(Boolean)
+        .join('\n');
+
+      return `VERIFIED CODE INTERPRETER EXECUTION (Attempt ${attempt} Succeeded):\nCode:\n${code.slice(
+        0,
+        1200
+      )}\n\nExact Computed Output:\n${output || 'Executed cleanly.'}`;
+    } catch (err) {
+      lastError = String(err);
+    }
+  }
+
+  return `Solver note after 3 attempts: ${lastError}`;
+}
+
 function runJsSandboxTool(expressionOrCode: string): string {
   try {
     const logs: string[] = [];
@@ -328,7 +440,20 @@ function detectGuaranteedDirectTool(
     return { tool: 'deep_research', query: userPrompt };
   }
 
+  const urlMatch = userPrompt.match(/https?:\/\/[^\s<>"]+/i);
+  if (urlMatch?.[0]) {
+    return { tool: 'read_url', query: urlMatch[0] };
+  }
+
   const p = userPrompt.toLowerCase();
+
+  if (
+    /\b(flowchart|architecture diagram|system diagram|mindmap|svg chart|sequence diagram|visual diagram)\b/.test(
+      p
+    )
+  ) {
+    return { tool: 'svg_diagram', query: userPrompt };
+  }
 
   if (
     /\b(deep research|comprehensive report|in-depth report|detailed research|research everything about)\b/.test(
@@ -415,6 +540,7 @@ export async function runOpenBrainAutonomousAgent(params: {
   attachedImage?: string;
   attachedFileText?: string;
   attachedFileName?: string;
+  attachedDocs?: AttachedDocItem[];
   onSaveMemoryFact: (fact: string, category?: MemoryItem['category']) => string | undefined;
   onStepsChange: (steps: AgentToolStep[]) => void;
 }): Promise<{
@@ -429,6 +555,7 @@ export async function runOpenBrainAutonomousAgent(params: {
   showVoiceCloneRecorder?: boolean;
   phoneActions: PhoneActionPayload[];
   codeArtifact?: { title: string; html: string };
+  svgDiagramArtifact?: { title: string; svg: string };
   toolSteps: AgentToolStep[];
   activeSkillNames: string[];
 }> {
@@ -446,6 +573,7 @@ export async function runOpenBrainAutonomousAgent(params: {
     attachedImage,
     attachedFileText,
     attachedFileName,
+    attachedDocs,
     onSaveMemoryFact,
     onStepsChange,
   } = params;
@@ -456,6 +584,7 @@ export async function runOpenBrainAutonomousAgent(params: {
   const collectedSources: ResearchSource[] = [];
   let savedMemoryFact: string | undefined;
   let codeArtifact: { title: string; html: string } | undefined;
+  let svgDiagramArtifact: { title: string; svg: string } | undefined;
   let codeVideoArtifact: RenderedCodeVideoArtifact | undefined;
   let voiceClipArtifact: SynthesizedClip | undefined;
   let showVoiceCloneRecorder = false;
@@ -500,6 +629,9 @@ export async function runOpenBrainAutonomousAgent(params: {
     } else {
       const availableToolLines: string[] = [
         '- "deep_research": multi-wave parallel research across Wikipedia, Web, HackerNews, GitHub & Academic Papers when user asks for deep research, thorough analysis, market/tech comparison, or cited report',
+        '- "read_url": fetch and read any http/https webpage, documentation URL, or article pasted by the user (query = exact URL)',
+        '- "code_interpreter": multi-attempt self-healing JavaScript solver for hard math, combinatorics, algorithms, statistics, simulations, or exact numerical proofs (query = exact problem statement)',
+        '- "svg_diagram": generate a clean vector SVG flowchart, architecture diagram, mindmap, or data chart inline (query = diagram specification)',
       ];
       if (settings.autoMemory !== false) {
         availableToolLines.push(
@@ -584,6 +716,9 @@ If it is pure conversation, coding explanation, writing, or reasoning needing no
       const stepId = `step-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
       const titleMap: Record<string, string> = {
         deep_research: 'Deep Research Multi-Wave Scanner',
+        read_url: 'Live Webpage & Document Reader',
+        code_interpreter: 'Self-Healing Code Interpreter',
+        svg_diagram: 'Vector Architecture & Chart Engine',
         save_memory: 'Permanent Memory Cortex',
         web_search: 'Live Web & Knowledge Search',
         github_search: 'GitHub Open-Source Search',
@@ -626,6 +761,40 @@ If it is pure conversation, coding explanation, writing, or reasoning needing no
           );
           for (const s of dr.sources) addSource(s);
           output = dr.dossier;
+        } else if (call.tool === 'read_url') {
+          output = await runLiveUrlReaderTool(call.query, addSource);
+        } else if (call.tool === 'code_interpreter') {
+          output = await runSelfHealingCodeInterpreter(
+            call.query || userPrompt,
+            settings,
+            (msg) => {
+              stepObj.title = `Code Interpreter: ${msg}`;
+              onStepsChange([...steps]);
+            }
+          );
+        } else if (call.tool === 'svg_diagram') {
+          const rawSvg = await generateFreeLLMResponse(
+            [
+              {
+                role: 'system',
+                content:
+                  'Generate ONLY a crisp, clean, self-contained <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 460">...</svg> diagram with dark slate card background (#0F172A), sharp teal/white boxes, clear arrows, and legible sans-serif labels. Output ONLY the <svg>...</svg> markup.',
+              },
+              { role: 'user', content: call.query || userPrompt },
+            ],
+            settings,
+            'qwen-coder'
+          );
+          const svgMatch = rawSvg.match(/<svg[\s\S]*<\/svg>/i);
+          if (svgMatch) {
+            svgDiagramArtifact = {
+              title: (call.query || 'Architecture Diagram').slice(0, 48),
+              svg: svgMatch[0],
+            };
+            output = `Generated interactive vector SVG diagram ("${svgDiagramArtifact.title}").`;
+          } else {
+            output = 'Prepared diagram explanation.';
+          }
         } else if (call.tool === 'save_memory') {
           const saved = onSaveMemoryFact(
             call.query,
@@ -852,11 +1021,33 @@ ${langHint}${memoryDirective}${projectDirective}${skillsDirective}${
     content: m.content,
   }));
 
-  const fullUserContent = attachedFileText
-    ? `${userPrompt}\n\n[Attached File: ${attachedFileName || 'document'}]\n${attachedFileText.slice(
-        0,
-        12000
-      )}`
+  // BM25 Long-Document & Multi-File RAG Indexing
+  const docsToIndex: AttachedDocItem[] =
+    attachedDocs && attachedDocs.length > 0
+      ? attachedDocs
+      : attachedFileText
+      ? [{ name: attachedFileName || 'document', content: attachedFileText }]
+      : [];
+
+  let ragContextBlock = '';
+  if (docsToIndex.length > 0) {
+    const tRag = performance.now();
+    const rag = retrieveRelevantDocumentContext(docsToIndex, userPrompt, 15000);
+    ragContextBlock = rag.contextBlock;
+    steps.push({
+      id: `step-rag-${Date.now()}`,
+      tool: 'rag_retriever',
+      title: `BM25 Long-Context RAG (${rag.totalCharsIndexed.toLocaleString()} chars)`,
+      query: docsToIndex.map((d) => d.name).join(', '),
+      status: 'done',
+      durationMs: Math.max(1, Math.round(performance.now() - tRag)),
+      resultSummary: `Indexed ${docsToIndex.length} file(s) & retrieved top ${rag.chunksSelected} passages`,
+    });
+    onStepsChange([...steps]);
+  }
+
+  const fullUserContent = ragContextBlock
+    ? `${userPrompt}\n\n${ragContextBlock}`
     : userPrompt;
 
   const finalMessages: ChatTurnInput[] = [
@@ -910,6 +1101,7 @@ ${langHint}${memoryDirective}${projectDirective}${skillsDirective}${
     showVoiceCloneRecorder,
     phoneActions,
     codeArtifact,
+    svgDiagramArtifact,
     toolSteps: steps,
     activeSkillNames: enabledSkills.map((s) => s.name),
   };

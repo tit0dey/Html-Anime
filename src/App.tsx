@@ -15,6 +15,7 @@ import {
   VoiceProfile,
 } from './types';
 import { runOpenBrainAutonomousAgent } from './services/agentEngine';
+import { AttachedDocItem } from './services/ragDocumentEngine';
 import {
   addOrUpdateMemory,
   loadMemories,
@@ -146,6 +147,7 @@ export function App() {
   const [attachedImage, setAttachedImage] = useState<string | undefined>(undefined);
   const [attachedFileName, setAttachedFileName] = useState<string | undefined>(undefined);
   const [attachedFileText, setAttachedFileText] = useState<string | undefined>(undefined);
+  const [attachedDocs, setAttachedDocs] = useState<AttachedDocItem[]>([]);
   const [isThinking, setIsThinking] = useState(false);
   const [liveSteps, setLiveSteps] = useState<AgentToolStep[]>([]);
 
@@ -355,21 +357,25 @@ export function App() {
   const handleFileOrAudioSelected = async (
     e: React.ChangeEvent<HTMLInputElement>
   ) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+    const first = files[0];
 
-    if (file.type.startsWith('audio/') || /\.(wav|mp3|m4a|ogg|webm)$/i.test(file.name)) {
+    if (
+      files.length === 1 &&
+      (first.type.startsWith('audio/') || /\.(wav|mp3|m4a|ogg|webm)$/i.test(first.name))
+    ) {
       try {
         const dataUrl = await new Promise<string>((resolve, reject) => {
           const r = new FileReader();
           r.onloadend = () => resolve(String(r.result));
           r.onerror = reject;
-          r.readAsDataURL(file);
+          r.readAsDataURL(first);
         });
-        const { durationSec, biometrics } = await analyzeVocalBiometrics(file);
+        const { durationSec, biometrics } = await analyzeVocalBiometrics(first);
         const vp: VoiceProfile = {
           id: `vp-${Date.now()}`,
-          name: file.name.replace(/\.[^.]+$/, ''),
+          name: first.name.replace(/\.[^.]+$/, ''),
           createdAt: Date.now(),
           audioDataUrl: dataUrl,
           durationSec,
@@ -390,9 +396,18 @@ export function App() {
     }
 
     try {
-      const text = await file.text();
-      setAttachedFileName(file.name);
-      setAttachedFileText(text.slice(0, 16000));
+      const loadedDocs: AttachedDocItem[] = [];
+      for (const f of files.slice(0, 20)) {
+        const text = await f.text();
+        loadedDocs.push({ name: f.name, content: text.slice(0, 600000) });
+      }
+      setAttachedDocs(loadedDocs);
+      setAttachedFileName(
+        loadedDocs.length === 1
+          ? loadedDocs[0].name
+          : `${loadedDocs.length} files (${loadedDocs.map((d) => d.name).join(', ')})`
+      );
+      setAttachedFileText(loadedDocs[0]?.content.slice(0, 16000));
     } catch {
       alert('Unsupported file format.');
     }
@@ -414,6 +429,7 @@ export function App() {
     const snapImage = attachedImage;
     const snapFileName = attachedFileName;
     const snapFileText = attachedFileText;
+    const snapDocs = attachedDocs;
     const snapDeepResearch = deepResearchActive;
 
     const userMsg: ChatMessage = {
@@ -448,6 +464,7 @@ export function App() {
     setAttachedImage(undefined);
     setAttachedFileName(undefined);
     setAttachedFileText(undefined);
+    setAttachedDocs([]);
     setIsThinking(true);
     setLiveSteps([]);
 
@@ -466,6 +483,7 @@ export function App() {
         attachedImage: snapImage,
         attachedFileText: snapFileText,
         attachedFileName: snapFileName,
+        attachedDocs: snapDocs,
         onSaveMemoryFact: handleSaveMemoryFact,
         onStepsChange: (st) => setLiveSteps(st),
       });
@@ -487,6 +505,7 @@ export function App() {
         showVoiceCloneRecorder: res.showVoiceCloneRecorder,
         phoneActions: res.phoneActions,
         codeArtifact: res.codeArtifact,
+        svgDiagramArtifact: res.svgDiagramArtifact,
         toolSteps: res.toolSteps,
       };
 
@@ -644,7 +663,8 @@ export function App() {
       <input
         ref={fileInputRef}
         type="file"
-        accept=".txt,.md,.json,.csv,.js,.ts,.py,.html,audio/*"
+        multiple
+        accept=".txt,.md,.json,.csv,.js,.ts,.tsx,.py,.java,.kt,.html,.css,.sql,.xml,.log,audio/*"
         onChange={handleFileOrAudioSelected}
         className="hidden"
       />
@@ -666,6 +686,7 @@ export function App() {
           setAttachedImage(undefined);
           setAttachedFileName(undefined);
           setAttachedFileText(undefined);
+          setAttachedDocs([]);
         }}
         onClearDeepResearch={() => setDeepResearchActive(false)}
         onSend={handleSend}

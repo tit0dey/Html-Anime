@@ -704,6 +704,38 @@ export const ChatWorkspace: React.FC<Props> = ({
                       </div>
                     )}
 
+                    {/* Inline Vector SVG Diagram / Chart Artifact */}
+                    {msg.svgDiagramArtifact && (
+                      <div className="rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-[#0F172A]">
+                        <div className="px-3.5 py-2 flex items-center justify-between border-b border-slate-800 text-xs text-slate-200">
+                          <span className="font-semibold truncate">
+                            {msg.svgDiagramArtifact.title}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              saveFileCrossPlatform(
+                                new Blob([msg.svgDiagramArtifact!.svg], {
+                                  type: 'image/svg+xml',
+                                }),
+                                `OpenBrainDiagram-${msg.id}.svg`,
+                                'image/svg+xml'
+                              )
+                            }
+                            className="font-semibold text-teal-300 flex items-center gap-1"
+                          >
+                            <Download className="w-3.5 h-3.5" /> .svg
+                          </button>
+                        </div>
+                        <div
+                          className="p-3 overflow-x-auto flex justify-center [&_svg]:max-w-full [&_svg]:h-auto"
+                          dangerouslySetInnerHTML={{
+                            __html: msg.svgDiagramArtifact.svg,
+                          }}
+                        />
+                      </div>
+                    )}
+
                     {/* Inline Interactive HTML5 Mini-App Artifact */}
                     {msg.codeArtifact && (
                       <div className="rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-[#F8F9FB] dark:bg-[#141821]">

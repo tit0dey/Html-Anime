@@ -86,6 +86,10 @@ export interface AgentToolStep {
     | 'moa_council'
     | 'self_critic'
     | 'deep_research'
+    | 'rag_retriever'
+    | 'read_url'
+    | 'code_interpreter'
+    | 'svg_diagram'
     | 'save_memory'
     | 'web_search'
     | 'github_search'
@@ -168,6 +172,10 @@ export interface ChatMessage {
   codeArtifact?: {
     title: string;
     html: string;
+  };
+  svgDiagramArtifact?: {
+    title: string;
+    svg: string;
   };
   toolSteps?: AgentToolStep[];
 }

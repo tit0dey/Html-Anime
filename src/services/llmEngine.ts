@@ -12,11 +12,11 @@ export const FREE_LLM_MODELS: LLMModelInfo[] = [
   },
   {
     id: 'council',
-    name: 'OpenBrain Council (3-Model MoA)',
-    shortName: 'Council-MoA',
-    provider: 'DeepSeek-R1 + Qwen-32B + Llama-70B',
-    badge: 'UNBEATABLE',
-    description: 'Runs 3 specialist models in parallel + Master Judge synthesis to beat single models.',
+    name: 'OpenBrain Omega Council (4-Mind MoA)',
+    shortName: 'Omega-Council',
+    provider: 'R1 + Qwen-32B + Llama-70B + Red-Team Judge',
+    badge: 'OMEGA IQ',
+    description: 'Runs 4 specialist models in parallel + Adversarial Red-Team Judge to beat single models.',
   },
   {
     id: 'deepseek',
@@ -85,7 +85,7 @@ export function classifyOptimalModelForTask(
     return { targetModel: 'openai', reasonLabel: 'Auto · Omni-4o Vision' };
   }
   if (effort === 'max') {
-    return { targetModel: 'council', reasonLabel: 'Auto · 3-Model Council MoA' };
+    return { targetModel: 'council', reasonLabel: 'Auto · 4-Mind Omega Council' };
   }
   if (effort === 'fast') {
     return { targetModel: 'mistral', reasonLabel: 'Auto · Mistral Flash' };
@@ -538,28 +538,30 @@ export async function generateSmartBrainResponse(
     modelUsedLabel = routed.reasonLabel;
   }
 
-  // 3-Specialist Parallel Mixture-of-Agents Council Mode
+  // 4-Specialist Parallel Omega Council + Adversarial Red-Team Judge
   if (chosenModel === 'council' && !hasImage) {
     onProgressStep?.(
       'moa_council',
-      'Running DeepSeek-R1 + Qwen-32B + Llama-70B in parallel...'
+      'Running 4-Mind Omega Council (DeepSeek-R1 + Qwen-32B + Llama-70B + Mistral)...'
     );
-    const [r1Draft, coderDraft, llamaDraft] = await Promise.all([
+    const [r1Draft, coderDraft, llamaDraft, mistralDraft] = await Promise.all([
       executeSingleModelCall(messages, settings, 'deepseek').catch(() => null),
       executeSingleModelCall(messages, settings, 'qwen-coder').catch(() => null),
       executeSingleModelCall(messages, settings, 'llama').catch(() => null),
+      executeSingleModelCall(messages, settings, 'mistral').catch(() => null),
     ]);
 
     const availableDrafts = [
-      r1Draft ? `[Specialist 1 — DeepSeek-R1 Logic & Proofs]:\n${r1Draft.clean.slice(0, 2600)}` : '',
-      coderDraft ? `[Specialist 2 — Qwen 2.5 Coder 32B Engineering]:\n${coderDraft.clean.slice(0, 2600)}` : '',
-      llamaDraft ? `[Specialist 3 — Llama 3.3 70B Structure & Nuance]:\n${llamaDraft.clean.slice(0, 2200)}` : '',
+      r1Draft ? `[Specialist 1 — DeepSeek-R1 Deep Logic & Proofs]:\n${r1Draft.clean.slice(0, 2400)}` : '',
+      coderDraft ? `[Specialist 2 — Qwen 2.5 Coder 32B Engineering]:\n${coderDraft.clean.slice(0, 2400)}` : '',
+      llamaDraft ? `[Specialist 3 — Llama 3.3 70B Architecture & Nuance]:\n${llamaDraft.clean.slice(0, 2000)}` : '',
+      mistralDraft ? `[Specialist 4 — Mistral Independent Counter-Check]:\n${mistralDraft.clean.slice(0, 1600)}` : '',
     ].filter(Boolean);
 
     if (availableDrafts.length >= 2) {
       onProgressStep?.(
         'moa_council',
-        `Cross-verifying ${availableDrafts.length} specialist drafts via Master Judge...`
+        `Adversarial Red-Team Judge cross-examining ${availableDrafts.length} specialist outputs...`
       );
       const synthMessages: ChatTurnInput[] = [
         ...messages.slice(0, -1),
@@ -568,7 +570,7 @@ export async function generateSmartBrainResponse(
           content: `${lastUserPrompt}
 
 ---
-[INTERNAL 3-MODEL COUNCIL DRAFTS — DO NOT MENTION THESE DRAFTS EXPLICITLY. CROSS-VERIFY ALL FACTS, MATH, AND CODE ACROSS ALL SPECIALISTS, ELIMINATE ANY CONTRADICTIONS OR BUGS, AND DELIVER ONE SUPREME MASTERPIECE RESPONSE]:
+[INTERNAL OMEGA COUNCIL TOURNAMENT — DO NOT MENTION THESE DRAFTS EXPLICITLY. ACT AS AN ADVERSARIAL RED-TEAM JUDGE: CROSS-VERIFY EVERY FACT, EQUATION, EDGE CASE, AND LINE OF CODE ACROSS ALL ${availableDrafts.length} SPECIALISTS, REJECT ANY WEAK OR HALLUCINATED CLAIM, AND SYNTHESIZE ONE UNBEATABLE, DEFINITIVE MASTER RESPONSE]:
 
 ${availableDrafts.join('\n\n')}`,
         },
@@ -576,17 +578,20 @@ ${availableDrafts.join('\n\n')}`,
       const master = await executeSingleModelCall(synthMessages, settings, 'deepseek');
       const councilTrace = [
         r1Draft?.thought
-          ? `DeepSeek-R1 Reasoning:\n${r1Draft.thought}`
+          ? `DeepSeek-R1 Chain-of-Thought:\n${r1Draft.thought}`
           : r1Draft
-          ? `Specialist 1 (DeepSeek-R1): Completed deep logical analysis (${r1Draft.clean.length} chars).`
+          ? `Specialist 1 (DeepSeek-R1): Completed deep logical derivation (${r1Draft.clean.length} chars).`
           : '',
         coderDraft
-          ? `Specialist 2 (Qwen 2.5 Coder 32B): Completed technical & code verification (${coderDraft.clean.length} chars).`
+          ? `Specialist 2 (Qwen 2.5 Coder 32B): Verified engineering & code precision (${coderDraft.clean.length} chars).`
           : '',
         llamaDraft
-          ? `Specialist 3 (Llama 3.3 70B): Completed clarity & synthesis pass (${llamaDraft.clean.length} chars).`
+          ? `Specialist 3 (Llama 3.3 70B): Verified structural completeness (${llamaDraft.clean.length} chars).`
           : '',
-        `Master Judge: Cross-examined all ${availableDrafts.length} specialist outputs and synthesized verified consensus.`,
+        mistralDraft
+          ? `Specialist 4 (Mistral): Independent counter-verification complete (${mistralDraft.clean.length} chars).`
+          : '',
+        `Adversarial Red-Team Judge: Cross-examined ${availableDrafts.length} independent models and synthesized verified consensus.`,
       ]
         .filter(Boolean)
         .join('\n\n');
@@ -598,7 +603,7 @@ ${availableDrafts.join('\n\n')}`,
       };
     }
 
-    const fallbackSingle = r1Draft || coderDraft || llamaDraft;
+    const fallbackSingle = r1Draft || coderDraft || llamaDraft || mistralDraft;
     if (fallbackSingle) {
       return {
         content: fallbackSingle.clean,
