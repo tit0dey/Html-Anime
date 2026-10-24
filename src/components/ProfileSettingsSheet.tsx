@@ -86,7 +86,7 @@ export const ProfileSettingsSheet: React.FC<Props> = ({
             {settings.userName}
           </h2>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-            Open Brain v3.5 Ultra · 3-Model Council · Self-Critic · Memory
+            Open Brain v4.5 · Multi-Cloud Mesh · Voicebox Cloning
           </p>
         </div>
 
@@ -333,7 +333,7 @@ export const ProfileSettingsSheet: React.FC<Props> = ({
                   <Download className="w-5 h-5 text-slate-700 dark:text-slate-300 stroke-[1.75]" />
                   Download Android APK
                 </span>
-                <span className="text-xs font-semibold text-slate-500">v3.5 Signed</span>
+                <span className="text-xs font-semibold text-slate-500">v4.5 Signed</span>
               </a>
             )}
 
@@ -384,6 +384,15 @@ export const ProfileSettingsSheet: React.FC<Props> = ({
                     placeholder="Gemini Studio Key AIza... (optional)"
                     className="w-full rounded-xl bg-[#F5F6F8] dark:bg-[#0E121A] px-3 py-2 text-slate-900 dark:text-white"
                   />
+                  <input
+                    type="url"
+                    value={settings.voiceboxServerUrl || ''}
+                    onChange={(e) =>
+                      onUpdateSettings({ voiceboxServerUrl: e.target.value })
+                    }
+                    placeholder="Voicebox Studio Server http://192.168.x.x:17493 (optional)"
+                    className="w-full rounded-xl bg-[#F5F6F8] dark:bg-[#0E121A] px-3 py-2 text-slate-900 dark:text-white"
+                  />
                 </div>
               )}
             </div>
@@ -402,7 +411,7 @@ export const ProfileSettingsSheet: React.FC<Props> = ({
               </button>
               {showAbout && (
                 <p className="mt-2.5 text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-                  Open Brain v3.5 Ultra unites Smart Multi-Model Routing, 3-Specialist Parallel Council Synthesis (DeepSeek-R1 + Qwen 2.5 Coder 32B + Llama 3.3 70B), Self-Verifying Critic Loops, Permanent Personal Memory, Multi-Wave Deep Research, Hardware H.264 MP4 Video, Zero-Shot Voice Cloning, Flux.1 HD Art, and Native Android Phone OS Control.
+                  Open Brain v4.5 unites CORS-Free Android Native Java HTTP Networking, Multi-Cloud Free AI Mesh (Pollinations + HuggingFace ZeroGPU Qwen/DeepSeek + Omega Council), Voicebox Multi-Engine Voice Cloning (Chatterbox, Qwen3-TTS, F5-TTS, Vocal DNA Pedalboard &amp; Voicebox Studio Server support), Permanent Personal Memory, Deep Research, Hardware H.264 MP4 Video, and Native Android Phone OS Control.
                 </p>
               )}
             </div>

@@ -37,6 +37,7 @@ import {
   executePhoneAction,
   isRunningInAndroidApk,
   saveFileCrossPlatform,
+  showNativeToast,
   speakWithDeviceFallback,
   triggerHaptic,
 } from '../services/nativeBridge';
@@ -243,7 +244,7 @@ export const ChatWorkspace: React.FC<Props> = ({
     const SR =
       (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SR) {
-      alert('Live microphone dictation is not supported in this browser.');
+      showNativeToast('Live microphone dictation is not supported on this WebView.');
       return;
     }
     if (isListening && speechRecRef.current) {
@@ -291,7 +292,7 @@ export const ChatWorkspace: React.FC<Props> = ({
       });
       setEditingVideoMsgId(null);
     } catch (err: any) {
-      alert(`Sandbox code error: ${err?.message || String(err)}`);
+      showNativeToast(`Sandbox code error: ${err?.message || String(err)}`);
     } finally {
       setReRenderingId(null);
     }

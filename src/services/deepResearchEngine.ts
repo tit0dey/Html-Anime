@@ -1,5 +1,6 @@
 import { AppSettings, ResearchSource } from '../types';
 import { extractJsonObject, generateFreeLLMResponse } from './llmEngine';
+import { smartFetch } from './nativeHttp';
 
 interface QueryPlan {
   queries: string[];
@@ -45,7 +46,7 @@ export async function runDeepResearchPipeline(
   const primaryQ = searchQueries[0] || userQuery;
   const secondaryQ = searchQueries[1] || primaryQ;
 
-  onProgress?.(`Scanning Wikipedia, Web, HackerNews, Reddit, GitHub & Papers in parallel...`);
+  onProgress?.('Scanning Wikipedia, Web, HackerNews, GitHub & Papers in parallel...');
 
   const collectedSources: ResearchSource[] = [];
   const evidenceSections: string[] = [];
@@ -60,13 +61,14 @@ export async function runDeepResearchPipeline(
     // 1. Wikipedia Deep Snippets
     (async () => {
       try {
-        const r = await fetch(
+        const r = await smartFetch(
           `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(
             primaryQ
-          )}&utf8=&format=json&origin=*&srlimit=4`
+          )}&utf8=&format=json&origin=*&srlimit=4`,
+          { timeoutMs: 9000 }
         );
         if (!r.ok) return;
-        const d = await r.json();
+        const d = r.json<any>();
         const lines: string[] = [];
         for (const h of (d?.query?.search || []).slice(0, 3)) {
           const title = String(h.title || '');
@@ -86,13 +88,14 @@ export async function runDeepResearchPipeline(
     // 2. DuckDuckGo Instant Graph
     (async () => {
       try {
-        const r = await fetch(
+        const r = await smartFetch(
           `https://api.duckduckgo.com/?q=${encodeURIComponent(
             primaryQ
-          )}&format=json&no_html=1&skip_disambig=1`
+          )}&format=json&no_html=1&skip_disambig=1`,
+          { timeoutMs: 9000 }
         );
         if (!r.ok) return;
-        const d = await r.json();
+        const d = r.json<any>();
         const lines: string[] = [];
         if (d.AbstractText) {
           if (d.AbstractURL) {
@@ -126,18 +129,18 @@ export async function runDeepResearchPipeline(
     // 3. HackerNews Algolia Articles
     (async () => {
       try {
-        const r = await fetch(
+        const r = await smartFetch(
           `https://hn.algolia.com/api/v1/search?query=${encodeURIComponent(
             secondaryQ
-          )}&hitsPerPage=4`
+          )}&hitsPerPage=4`,
+          { timeoutMs: 9000 }
         );
         if (!r.ok) return;
-        const d = await r.json();
+        const d = r.json<any>();
         const lines: string[] = [];
         for (const h of (d?.hits || []).slice(0, 4)) {
           if (!h?.title) continue;
-          const url =
-            h.url || `https://news.ycombinator.com/item?id=${h.objectID}`;
+          const url = h.url || `https://news.ycombinator.com/item?id=${h.objectID}`;
           addSource({
             title: h.title,
             url,
@@ -154,11 +157,12 @@ export async function runDeepResearchPipeline(
     // 4. Scholarly CrossRef / ArXiv Papers
     (async () => {
       try {
-        const r = await fetch(
-          `https://api.crossref.org/works?query=${encodeURIComponent(primaryQ)}&rows=3`
+        const r = await smartFetch(
+          `https://api.crossref.org/works?query=${encodeURIComponent(primaryQ)}&rows=3`,
+          { timeoutMs: 9000 }
         );
         if (!r.ok) return;
-        const d = await r.json();
+        const d = r.json<any>();
         const lines: string[] = [];
         for (const it of (d?.message?.items || []).slice(0, 3)) {
           const title = (it.title && it.title[0]) || 'Research Paper';
@@ -186,14 +190,14 @@ export async function runDeepResearchPipeline(
         if (settings.githubToken?.trim()) {
           headers.Authorization = `Bearer ${settings.githubToken.trim()}`;
         }
-        const r = await fetch(
+        const r = await smartFetch(
           `https://api.github.com/search/repositories?q=${encodeURIComponent(
             primaryQ
           )}&sort=stars&order=desc&per_page=3`,
-          { headers }
+          { headers, timeoutMs: 9000 }
         );
         if (!r.ok) return;
-        const d = await r.json();
+        const d = r.json<any>();
         const lines: string[] = [];
         for (const repo of (d?.items || []).slice(0, 3)) {
           if (repo?.html_url) {
