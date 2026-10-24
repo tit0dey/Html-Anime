@@ -1,29 +1,27 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
-  AudioWaveform,
-  Blocks,
-  Brain,
-  Clapperboard,
-  Code2,
-  Download,
-  Image as ImageIcon,
-  Smartphone,
-} from 'lucide-react';
-import {
+  AgentToolStep,
   AppSettings,
-  AppTab,
   BrainConnector,
   BrainSkill,
+  ChatMessage,
+  ConversationProject,
+  ConversationThread,
   CustomWebhookConnector,
+  GeneratedAssetItem,
+  MemoryItem,
+  RenderedCodeVideoArtifact,
+  SynthesizedClip,
+  VoiceProfile,
 } from './types';
-import { AgentStudio } from './components/AgentStudio';
-import { SkillsConnectorsHub } from './components/SkillsConnectorsHub';
-import { VideoStudio } from './components/VideoStudio';
-import { VoiceCloneStudio } from './components/VoiceCloneStudio';
-import { ImageStudio } from './components/ImageStudio';
-import { CodeBuilderStudio } from './components/CodeBuilderStudio';
-import { ApkAndSettingsHub } from './components/ApkAndSettingsHub';
-import { isRunningInAndroidApk, triggerHaptic } from './services/nativeBridge';
+import { runOpenBrainAutonomousAgent } from './services/agentEngine';
+import { AttachedDocItem } from './services/ragDocumentEngine';
+import {
+  addOrUpdateMemory,
+  loadMemories,
+  saveMemories,
+} from './services/memoryEngine';
+import { analyzeVocalBiometrics } from './services/voiceCloneEngine';
 import {
   loadCustomWebhooks,
   loadSavedConnectors,
@@ -32,13 +30,35 @@ import {
   saveCustomWebhooks,
   saveSkills,
 } from './services/skillsAndConnectors';
+import {
+  speakWithDeviceFallback,
+  syncNativeSystemBars,
+  triggerHaptic,
+} from './services/nativeBridge';
+import { ChatWorkspace } from './components/ChatWorkspace';
+import { NavigationDrawer } from './components/NavigationDrawer';
+import { AddToChatSheet } from './components/AddToChatSheet';
+import { SelectModelSheet } from './components/SelectModelSheet';
+import { ProfileSettingsSheet } from './components/ProfileSettingsSheet';
+import { AssetsVaultModal } from './components/AssetsVaultModal';
+import { PhoneControlModal } from './components/PhoneControlModal';
+import { SkillsConnectorsModal } from './components/SkillsConnectorsModal';
+import { VoiceLabModal } from './components/VoiceLabModal';
+import { MemoryModal } from './components/MemoryModal';
 
 const DEFAULT_SETTINGS: AppSettings = {
-  selectedModel: 'openai',
+  userName: 'Open Brain',
+  selectedModel: 'auto',
+  reasoningEffort: 'default',
+  appearance: 'light',
+  responseLanguage: 'en',
   autonomousAgent: true,
+  selfVerification: true,
+  autoMemory: true,
   autoSpeak: false,
   featherlightEcoMode: true,
-  language: 'en',
+  activeVoiceProfileId: '',
+  openrouterApiKey: '',
   groqApiKey: '',
   geminiApiKey: '',
   hfToken: '',
@@ -46,29 +66,70 @@ const DEFAULT_SETTINGS: AppSettings = {
   ollamaUrl: '',
 };
 
-const NAV_ITEMS: Array<{
-  id: AppTab;
-  label: string;
-  shortLabel: string;
-  icon: React.FC<{ className?: string }>;
-}> = [
-  { id: 'agent', label: 'Open Brain Agent', shortLabel: 'Brain', icon: Brain },
-  { id: 'skills', label: 'Skills & Connectors', shortLabel: 'Skills', icon: Blocks },
-  { id: 'video', label: 'MP4 Video Sandbox', shortLabel: 'MP4', icon: Clapperboard },
-  { id: 'voice', label: 'Voice Cloning', shortLabel: 'Voice', icon: AudioWaveform },
-  { id: 'image', label: 'Flux Art Studio', shortLabel: 'Art', icon: ImageIcon },
-  { id: 'code', label: 'App Builder', shortLabel: 'Code', icon: Code2 },
-  { id: 'apk', label: 'Android APK & Eco', shortLabel: 'APK', icon: Smartphone },
-];
+function createEmptyThread(projectId?: string): ConversationThread {
+  return {
+    id: `th-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    title: 'New Chat',
+    projectId,
+    updatedAt: Date.now(),
+    messages: [],
+  };
+}
 
 export function App() {
-  const [activeTab, setActiveTab] = useState<AppTab>('agent');
   const [settings, setSettings] = useState<AppSettings>(() => {
     try {
-      const raw = localStorage.getItem('openbrain_settings_v3');
-      return raw ? { ...DEFAULT_SETTINGS, ...JSON.parse(raw), language: 'en' } : DEFAULT_SETTINGS;
+      const saved = localStorage.getItem('openbrain_settings_v4');
+      return saved ? { ...DEFAULT_SETTINGS, ...JSON.parse(saved) } : DEFAULT_SETTINGS;
     } catch {
       return DEFAULT_SETTINGS;
+    }
+  });
+
+  const [threads, setThreads] = useState<ConversationThread[]>(() => {
+    try {
+      const raw = localStorage.getItem('openbrain_threads_v4');
+      if (raw) {
+        const parsed = JSON.parse(raw) as ConversationThread[];
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {
+      // Ignore
+    }
+    return [createEmptyThread()];
+  });
+
+  const [activeThreadId, setActiveThreadId] = useState<string>(() => {
+    return threads[0]?.id || '';
+  });
+
+  const [projects, setProjects] = useState<ConversationProject[]>(() => {
+    try {
+      const raw = localStorage.getItem('openbrain_projects_v4');
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [activeProjectId, setActiveProjectId] = useState<string | undefined>(undefined);
+
+  const [memories, setMemories] = useState<MemoryItem[]>(() => loadMemories());
+
+  const [assets, setAssets] = useState<GeneratedAssetItem[]>(() => {
+    try {
+      const raw = localStorage.getItem('openbrain_assets_v4');
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const [voiceProfiles, setVoiceProfiles] = useState<VoiceProfile[]>(() => {
+    try {
+      const raw = localStorage.getItem('openbrain_voice_profiles_v2');
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
     }
   });
 
@@ -80,209 +141,714 @@ export function App() {
     loadCustomWebhooks()
   );
 
+  // Composer & Live Execution State
+  const [composerDraft, setComposerDraft] = useState('');
+  const [deepResearchActive, setDeepResearchActive] = useState(false);
+  const [attachedImage, setAttachedImage] = useState<string | undefined>(undefined);
+  const [attachedFileName, setAttachedFileName] = useState<string | undefined>(undefined);
+  const [attachedFileText, setAttachedFileText] = useState<string | undefined>(undefined);
+  const [attachedDocs, setAttachedDocs] = useState<AttachedDocItem[]>([]);
+  const [isThinking, setIsThinking] = useState(false);
+  const [liveSteps, setLiveSteps] = useState<AgentToolStep[]>([]);
+
+  // Sheets & Modals State
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [addSheetOpen, setAddSheetOpen] = useState(false);
+  const [modelSheetOpen, setModelSheetOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [assetsOpen, setAssetsOpen] = useState(false);
+  const [phoneModalOpen, setPhoneModalOpen] = useState(false);
+  const [skillsModalOpen, setSkillsModalOpen] = useState(false);
+  const [voiceModalOpen, setVoiceModalOpen] = useState(false);
+  const [memoryModalOpen, setMemoryModalOpen] = useState(false);
+
+  const galleryInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Sync Theme (Light / Dark / System) + Native Android System Bars
+  useEffect(() => {
+    const media = window.matchMedia('(prefers-color-scheme: dark)');
+    const apply = () => {
+      const isDark =
+        settings.appearance === 'dark' ||
+        (settings.appearance === 'system' && media.matches);
+      document.documentElement.classList.toggle('dark', isDark);
+      const meta = document.getElementById('meta-theme-color');
+      if (meta) meta.setAttribute('content', isDark ? '#0B0E14' : '#FFFFFF');
+      syncNativeSystemBars(isDark);
+    };
+    apply();
+    media.addEventListener('change', apply);
+    return () => media.removeEventListener('change', apply);
+  }, [settings.appearance]);
+
+  // Persist Settings
   useEffect(() => {
     try {
-      localStorage.setItem('openbrain_settings_v3', JSON.stringify(settings));
+      localStorage.setItem('openbrain_settings_v4', JSON.stringify(settings));
     } catch {
       // Ignore
     }
-    if (settings.featherlightEcoMode) {
-      document.body.classList.remove('fx-rich');
-    } else {
-      document.body.classList.add('fx-rich');
-    }
   }, [settings]);
 
+  // Persist Threads (stripping ephemeral blob: URLs)
+  useEffect(() => {
+    try {
+      const serializable = threads.slice(0, 25).map((t) => ({
+        ...t,
+        messages: t.messages.slice(-30).map((m) => ({
+          ...m,
+          attachedImage: undefined,
+          codeVideoArtifact: m.codeVideoArtifact?.videoUrl?.startsWith('blob:')
+            ? undefined
+            : m.codeVideoArtifact,
+          voiceClipArtifact: m.voiceClipArtifact?.audioUrl?.startsWith('blob:')
+            ? undefined
+            : m.voiceClipArtifact,
+        })),
+      }));
+      localStorage.setItem('openbrain_threads_v4', JSON.stringify(serializable));
+    } catch {
+      // Ignore quota
+    }
+  }, [threads]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('openbrain_projects_v4', JSON.stringify(projects));
+    } catch {
+      // Ignore
+    }
+  }, [projects]);
+
+  useEffect(() => {
+    try {
+      const persistentAssets = assets
+        .filter((a) => !a.url?.startsWith('blob:'))
+        .slice(0, 30);
+      localStorage.setItem('openbrain_assets_v4', JSON.stringify(persistentAssets));
+    } catch {
+      // Ignore
+    }
+  }, [assets]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        'openbrain_voice_profiles_v2',
+        JSON.stringify(voiceProfiles.slice(0, 6))
+      );
+    } catch {
+      // Ignore
+    }
+  }, [voiceProfiles]);
+
+  // Android Native Hardware Back Gesture Handler
   useEffect(() => {
     (window as any).__openBrainBackHandler = () => {
-      if (activeTab !== 'agent') {
-        setActiveTab('agent');
+      if (modelSheetOpen) {
+        setModelSheetOpen(false);
+        return true;
+      }
+      if (addSheetOpen) {
+        setAddSheetOpen(false);
+        return true;
+      }
+      if (drawerOpen) {
+        setDrawerOpen(false);
+        return true;
+      }
+      if (profileOpen) {
+        setProfileOpen(false);
+        return true;
+      }
+      if (assetsOpen) {
+        setAssetsOpen(false);
+        return true;
+      }
+      if (phoneModalOpen) {
+        setPhoneModalOpen(false);
+        return true;
+      }
+      if (skillsModalOpen) {
+        setSkillsModalOpen(false);
+        return true;
+      }
+      if (voiceModalOpen) {
+        setVoiceModalOpen(false);
+        return true;
+      }
+      if (memoryModalOpen) {
+        setMemoryModalOpen(false);
         return true;
       }
       return false;
     };
-  }, [activeTab]);
+  }, [
+    modelSheetOpen,
+    addSheetOpen,
+    drawerOpen,
+    profileOpen,
+    assetsOpen,
+    phoneModalOpen,
+    skillsModalOpen,
+    voiceModalOpen,
+    memoryModalOpen,
+  ]);
+
+  const activeThread =
+    threads.find((t) => t.id === activeThreadId) || threads[0];
+
+  const activeProject = projects.find(
+    (p) => p.id === (activeThread?.projectId || activeProjectId)
+  );
+
+  const activeVoiceProfile =
+    voiceProfiles.find((v) => v.id === settings.activeVoiceProfileId) ||
+    voiceProfiles[0];
 
   const updateSettings = (patch: Partial<AppSettings>) => {
     setSettings((prev) => ({ ...prev, ...patch }));
   };
 
-  const handleChangeSkills = (next: BrainSkill[]) => {
-    setSkills(next);
-    saveSkills(next);
+  const handleSaveMemoryFact = (
+    fact: string,
+    category: MemoryItem['category'] = 'preference'
+  ): string | undefined => {
+    let savedFact: string | undefined;
+    setMemories((prev) => {
+      const res = addOrUpdateMemory(prev, fact, category);
+      if (res.addedItem) savedFact = res.addedItem.fact;
+      return res.updated;
+    });
+    return savedFact || fact;
   };
 
-  const handleChangeConnectors = (next: BrainConnector[]) => {
-    setConnectors(next);
-    saveConnectors(next);
+  const handleNewChat = (projectId?: string) => {
+    if (activeThread && activeThread.messages.length === 0) {
+      if (projectId !== undefined) {
+        setThreads((prev) =>
+          prev.map((t) => (t.id === activeThread.id ? { ...t, projectId } : t))
+        );
+      }
+      return;
+    }
+    const fresh = createEmptyThread(projectId ?? activeProjectId);
+    setThreads((prev) => [fresh, ...prev]);
+    setActiveThreadId(fresh.id);
+    setComposerDraft('');
+    setAttachedImage(undefined);
+    setAttachedFileName(undefined);
+    setAttachedFileText(undefined);
   };
 
-  const handleChangeWebhooks = (next: CustomWebhookConnector[]) => {
-    setWebhooks(next);
-    saveCustomWebhooks(next);
+  const handleImageSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setAttachedImage(String(reader.result));
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
   };
 
-  const inApk = isRunningInAndroidApk();
+  const handleFileOrAudioSelected = async (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+    const first = files[0];
+
+    if (
+      files.length === 1 &&
+      (first.type.startsWith('audio/') || /\.(wav|mp3|m4a|ogg|webm)$/i.test(first.name))
+    ) {
+      try {
+        const dataUrl = await new Promise<string>((resolve, reject) => {
+          const r = new FileReader();
+          r.onloadend = () => resolve(String(r.result));
+          r.onerror = reject;
+          r.readAsDataURL(first);
+        });
+        const { durationSec, biometrics } = await analyzeVocalBiometrics(first);
+        const vp: VoiceProfile = {
+          id: `vp-${Date.now()}`,
+          name: first.name.replace(/\.[^.]+$/, ''),
+          createdAt: Date.now(),
+          audioDataUrl: dataUrl,
+          durationSec,
+          referenceText: 'Voice sample uploaded in Open Brain chat.',
+          biometrics,
+        };
+        setVoiceProfiles((prev) => [vp, ...prev]);
+        updateSettings({ activeVoiceProfileId: vp.id });
+        setComposerDraft(
+          (prev) =>
+            prev || `Speak in my newly cloned voice "${vp.name}": Hello, Open Brain is live!`
+        );
+      } catch (err: any) {
+        alert(`Could not analyze audio file: ${err?.message || String(err)}`);
+      }
+      e.target.value = '';
+      return;
+    }
+
+    try {
+      const loadedDocs: AttachedDocItem[] = [];
+      for (const f of files.slice(0, 20)) {
+        const text = await f.text();
+        loadedDocs.push({ name: f.name, content: text.slice(0, 600000) });
+      }
+      setAttachedDocs(loadedDocs);
+      setAttachedFileName(
+        loadedDocs.length === 1
+          ? loadedDocs[0].name
+          : `${loadedDocs.length} files (${loadedDocs.map((d) => d.name).join(', ')})`
+      );
+      setAttachedFileText(loadedDocs[0]?.content.slice(0, 16000));
+    } catch {
+      alert('Unsupported file format.');
+    }
+    e.target.value = '';
+  };
+
+  const handleSend = async () => {
+    const prompt =
+      composerDraft.trim() ||
+      (attachedImage
+        ? 'Analyze this image thoroughly.'
+        : attachedFileName
+        ? `Analyze the attached file ${attachedFileName}.`
+        : '');
+    if (!prompt || isThinking || !activeThread) return;
+
+    triggerHaptic(14);
+    const threadId = activeThread.id;
+    const snapImage = attachedImage;
+    const snapFileName = attachedFileName;
+    const snapFileText = attachedFileText;
+    const snapDocs = attachedDocs;
+    const snapDeepResearch = deepResearchActive;
+
+    const userMsg: ChatMessage = {
+      id: `u-${Date.now()}`,
+      role: 'user',
+      content: prompt,
+      timestamp: Date.now(),
+      attachedImage: snapImage,
+      attachedFileName: snapFileName,
+    };
+
+    const nextHistory = [...activeThread.messages, userMsg];
+    const autoTitle =
+      activeThread.messages.length === 0
+        ? prompt.replace(/\s+/g, ' ').slice(0, 42)
+        : activeThread.title;
+
+    setThreads((prev) =>
+      prev.map((t) =>
+        t.id === threadId
+          ? {
+              ...t,
+              title: autoTitle,
+              updatedAt: Date.now(),
+              messages: nextHistory,
+            }
+          : t
+      )
+    );
+
+    setComposerDraft('');
+    setAttachedImage(undefined);
+    setAttachedFileName(undefined);
+    setAttachedFileText(undefined);
+    setAttachedDocs([]);
+    setIsThinking(true);
+    setLiveSteps([]);
+
+    try {
+      const res = await runOpenBrainAutonomousAgent({
+        userPrompt: prompt,
+        history: activeThread.messages,
+        settings,
+        skills,
+        connectors,
+        webhooks,
+        voiceProfiles,
+        memories,
+        forceDeepResearch: snapDeepResearch,
+        projectInstructions: activeProject?.instructions,
+        attachedImage: snapImage,
+        attachedFileText: snapFileText,
+        attachedFileName: snapFileName,
+        attachedDocs: snapDocs,
+        onSaveMemoryFact: handleSaveMemoryFact,
+        onStepsChange: (st) => setLiveSteps(st),
+      });
+
+      const assistantMsg: ChatMessage = {
+        id: `a-${Date.now()}`,
+        role: 'assistant',
+        content: res.reply,
+        timestamp: Date.now(),
+        model: settings.selectedModel,
+        routedModelLabel: res.routedModelLabel,
+        thinkingTrace: res.thinkingTrace,
+        sources: res.sources,
+        savedMemoryFact: res.savedMemoryFact,
+        activeSkillNames: res.activeSkillNames,
+        generatedImages: res.generatedImages,
+        codeVideoArtifact: res.codeVideoArtifact,
+        voiceClipArtifact: res.voiceClipArtifact,
+        showVoiceCloneRecorder: res.showVoiceCloneRecorder,
+        phoneActions: res.phoneActions,
+        codeArtifact: res.codeArtifact,
+        svgDiagramArtifact: res.svgDiagramArtifact,
+        toolSteps: res.toolSteps,
+      };
+
+      setThreads((prev) =>
+        prev.map((t) =>
+          t.id === threadId
+            ? {
+                ...t,
+                updatedAt: Date.now(),
+                messages: [...t.messages, assistantMsg],
+              }
+            : t
+        )
+      );
+
+      // Auto-register any generated creations into Assets Vault
+      const newAssets: GeneratedAssetItem[] = [];
+      if (res.codeVideoArtifact) {
+        newAssets.push({
+          id: `vid-${Date.now()}`,
+          kind: 'video',
+          title: res.codeVideoArtifact.title,
+          subtitle: res.codeVideoArtifact.engineLabel || 'MP4 Video',
+          url: res.codeVideoArtifact.videoUrl,
+          code: res.codeVideoArtifact.code,
+          mimeType: res.codeVideoArtifact.mimeType,
+          createdAt: Date.now(),
+        });
+      }
+      if (res.voiceClipArtifact) {
+        newAssets.push({
+          id: res.voiceClipArtifact.id,
+          kind: 'voice',
+          title: res.voiceClipArtifact.text.slice(0, 48),
+          subtitle: res.voiceClipArtifact.voiceName,
+          url: res.voiceClipArtifact.audioUrl,
+          mimeType: 'audio/wav',
+          createdAt: Date.now(),
+        });
+      }
+      if (res.generatedImages.length > 0) {
+        for (const imgUrl of res.generatedImages) {
+          newAssets.push({
+            id: `img-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
+            kind: 'image',
+            title: prompt.slice(0, 48),
+            subtitle: 'Flux.1 Studio HD',
+            url: imgUrl,
+            mimeType: 'image/jpeg',
+            createdAt: Date.now(),
+          });
+        }
+      }
+      if (res.codeArtifact) {
+        newAssets.push({
+          id: `app-${Date.now()}`,
+          kind: 'app',
+          title: res.codeArtifact.title,
+          subtitle: 'Interactive HTML5 App',
+          html: res.codeArtifact.html,
+          mimeType: 'text/html',
+          createdAt: Date.now(),
+        });
+      }
+      if (newAssets.length > 0) {
+        setAssets((prev) => [...newAssets, ...prev]);
+      }
+
+      if (settings.autoSpeak) {
+        speakWithDeviceFallback(res.reply, 'en-US');
+      }
+    } catch (err: any) {
+      const errMsg: ChatMessage = {
+        id: `err-${Date.now()}`,
+        role: 'assistant',
+        content: `Could not complete request right now: ${
+          err?.message || String(err)
+        }`,
+        timestamp: Date.now(),
+      };
+      setThreads((prev) =>
+        prev.map((t) =>
+          t.id === threadId ? { ...t, messages: [...t.messages, errMsg] } : t
+        )
+      );
+    } finally {
+      setIsThinking(false);
+      setLiveSteps([]);
+    }
+  };
+
+  const handleSaveVoiceProfile = (vp: VoiceProfile) => {
+    setVoiceProfiles((prev) => [vp, ...prev]);
+    updateSettings({ activeVoiceProfileId: vp.id });
+  };
+
+  const handleDeleteVoiceProfile = (id: string) => {
+    setVoiceProfiles((prev) => prev.filter((p) => p.id !== id));
+    if (settings.activeVoiceProfileId === id) {
+      updateSettings({ activeVoiceProfileId: '' });
+    }
+  };
+
+  const handleGeneratedVoiceClipFromLab = (clip: SynthesizedClip) => {
+    setAssets((prev) => [
+      {
+        id: clip.id,
+        kind: 'voice',
+        title: clip.text.slice(0, 48),
+        subtitle: clip.voiceName,
+        url: clip.audioUrl,
+        mimeType: 'audio/wav',
+        createdAt: Date.now(),
+      },
+      ...prev,
+    ]);
+  };
+
+  const handleUpdateVideoArtifact = (
+    msgId: string,
+    updated: RenderedCodeVideoArtifact
+  ) => {
+    if (!activeThread) return;
+    setThreads((prev) =>
+      prev.map((t) =>
+        t.id === activeThread.id
+          ? {
+              ...t,
+              messages: t.messages.map((m) =>
+                m.id === msgId ? { ...m, codeVideoArtifact: updated } : m
+              ),
+            }
+          : t
+      )
+    );
+  };
 
   return (
-    <div className="min-h-[100dvh] flex flex-col md:flex-row max-w-7xl mx-auto">
-      {/* Desktop Sidebar */}
-      <aside className="hidden md:flex md:w-64 lg:w-72 shrink-0 p-4 flex-col justify-between">
-        <div className="glass-card rounded-3xl p-4 space-y-5 h-full flex flex-col justify-between">
-          <div className="space-y-5">
-            <div className="flex items-center gap-3 px-1">
-              <div className="w-11 h-11 rounded-2xl bg-teal-500/15 border border-teal-500/40 flex items-center justify-center">
-                <Brain className="w-6 h-6 text-teal-400" />
-              </div>
-              <div>
-                <h1 className="font-extrabold text-lg tracking-tight text-white">
-                  Open <span className="text-teal-400">Brain</span>
-                </h1>
-                <p className="text-[11px] text-teal-400 font-semibold">
-                  Free • Unlimited • Zero-Load
-                </p>
-              </div>
-            </div>
+    <>
+      <input
+        ref={galleryInputRef}
+        type="file"
+        accept="image/*"
+        onChange={handleImageSelected}
+        className="hidden"
+      />
+      <input
+        ref={cameraInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        onChange={handleImageSelected}
+        className="hidden"
+      />
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        accept=".txt,.md,.json,.csv,.js,.ts,.tsx,.py,.java,.kt,.html,.css,.sql,.xml,.log,audio/*"
+        onChange={handleFileOrAudioSelected}
+        className="hidden"
+      />
 
-            <nav className="space-y-1">
-              {NAV_ITEMS.map((item) => {
-                const Icon = item.icon;
-                const active = activeTab === item.id;
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => {
-                      triggerHaptic(10);
-                      setActiveTab(item.id);
-                    }}
-                    className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-2xl text-sm font-semibold transition ${
-                      active
-                        ? 'bg-teal-500/20 text-white border border-teal-500/45'
-                        : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60'
-                    }`}
-                  >
-                    <Icon className="w-4 h-4 text-teal-400" />
-                    <span>{item.label}</span>
-                  </button>
-                );
-              })}
-            </nav>
-          </div>
+      <ChatWorkspace
+        threadTitle={activeThread?.title || 'New Chat'}
+        messages={activeThread?.messages || []}
+        liveSteps={liveSteps}
+        isThinking={isThinking}
+        settings={settings}
+        voiceProfiles={voiceProfiles}
+        activeProjectName={activeProject?.name}
+        deepResearchActive={deepResearchActive}
+        composerDraft={composerDraft}
+        attachedImage={attachedImage}
+        attachedFileName={attachedFileName}
+        onChangeDraft={setComposerDraft}
+        onClearAttachments={() => {
+          setAttachedImage(undefined);
+          setAttachedFileName(undefined);
+          setAttachedFileText(undefined);
+          setAttachedDocs([]);
+        }}
+        onClearDeepResearch={() => setDeepResearchActive(false)}
+        onSend={handleSend}
+        onOpenDrawer={() => setDrawerOpen(true)}
+        onNewChat={() => handleNewChat()}
+        onOpenAddSheet={() => setAddSheetOpen(true)}
+        onOpenModelSheet={() => setModelSheetOpen(true)}
+        onOpenPhoneControl={() => setPhoneModalOpen(true)}
+        onSaveVoiceProfile={handleSaveVoiceProfile}
+        onSelectVoiceProfile={(id) => updateSettings({ activeVoiceProfileId: id })}
+        onUpdateVideoArtifact={handleUpdateVideoArtifact}
+      />
 
-          {!inApk && (
-            <div className="p-3.5 rounded-2xl bg-teal-950/35 border border-teal-500/30 space-y-2">
-              <div className="text-xs font-bold text-teal-300 flex items-center gap-1.5">
-                <Smartphone className="w-4 h-4 text-teal-400" /> Featherlight Android APK
-              </div>
-              <p className="text-[11px] text-slate-300">
-                ~190 KB signed APK • Zero phone lag • Full Phone OS control.
-              </p>
-              <a
-                href="./OpenBrain-AI.apk"
-                download="OpenBrain-AI.apk"
-                className="w-full py-2 px-3 rounded-xl bg-teal-500 hover:bg-teal-400 text-slate-950 font-extrabold text-xs flex items-center justify-center gap-1.5 transition"
-              >
-                <Download className="w-3.5 h-3.5" /> Download OpenBrain APK
-              </a>
-            </div>
-          )}
-        </div>
-      </aside>
+      <NavigationDrawer
+        open={drawerOpen}
+        userName={settings.userName}
+        threads={threads.filter((t) => t.messages.length > 0)}
+        activeThreadId={activeThread?.id || ''}
+        projects={projects}
+        activeProjectId={activeProjectId}
+        assetsCount={assets.length}
+        onClose={() => setDrawerOpen(false)}
+        onNewChat={(projId) => handleNewChat(projId)}
+        onSelectThread={(id) => setActiveThreadId(id)}
+        onTogglePinThread={(id) =>
+          setThreads((prev) =>
+            prev.map((t) => (t.id === id ? { ...t, pinned: !t.pinned } : t))
+          )
+        }
+        onDeleteThread={(id) => {
+          const remaining = threads.filter((t) => t.id !== id);
+          if (remaining.length === 0) {
+            const fresh = createEmptyThread();
+            setThreads([fresh]);
+            setActiveThreadId(fresh.id);
+          } else {
+            setThreads(remaining);
+            if (activeThreadId === id) setActiveThreadId(remaining[0].id);
+          }
+        }}
+        onCreateProject={(name, instructions) => {
+          const p: ConversationProject = {
+            id: `proj-${Date.now()}`,
+            name,
+            instructions,
+            createdAt: Date.now(),
+          };
+          setProjects((prev) => [p, ...prev]);
+          setActiveProjectId(p.id);
+        }}
+        onSelectProject={(id) => setActiveProjectId(id)}
+        onOpenPhoneControl={() => setPhoneModalOpen(true)}
+        onOpenAssets={() => setAssetsOpen(true)}
+        onOpenSkillsMore={() => setSkillsModalOpen(true)}
+        onOpenProfileSettings={() => setProfileOpen(true)}
+      />
 
-      {/* Mobile Header */}
-      <header className="md:hidden sticky top-0 z-30 px-3 pt-2.5 pb-1.5 bg-[#050A0E]/95 border-b border-slate-800/80">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-teal-500/15 border border-teal-500/40 flex items-center justify-center">
-              <Brain className="w-4 h-4 text-teal-400" />
-            </div>
-            <div>
-              <div className="font-extrabold text-sm text-white leading-tight">
-                Open <span className="text-teal-400">Brain</span>
-              </div>
-              <div className="text-[10px] text-teal-400 font-medium">
-                Zero-Pressure AI Super-Agent
-              </div>
-            </div>
-          </div>
+      <AddToChatSheet
+        open={addSheetOpen}
+        deepResearchActive={deepResearchActive}
+        memoriesCount={memories.length}
+        activeSkillsCount={skills.filter((s) => s.enabled).length}
+        activeConnectorsCount={connectors.filter((c) => c.enabled).length}
+        activeVoiceName={activeVoiceProfile?.name}
+        onClose={() => setAddSheetOpen(false)}
+        onToggleDeepResearch={() => setDeepResearchActive((v) => !v)}
+        onPickGalleryImage={() => galleryInputRef.current?.click()}
+        onPickCameraPhoto={() => cameraInputRef.current?.click()}
+        onPickFileOrAudio={() => fileInputRef.current?.click()}
+        onOpenSkillsModal={() => setSkillsModalOpen(true)}
+        onOpenMemoryModal={() => setMemoryModalOpen(true)}
+        onOpenVoiceLabModal={() => setVoiceModalOpen(true)}
+        onOpenPhoneModal={() => setPhoneModalOpen(true)}
+        onQuickPrompt={(p) => setComposerDraft(p)}
+      />
 
-          {!inApk ? (
-            <a
-              href="./OpenBrain-AI.apk"
-              download="OpenBrain-AI.apk"
-              className="px-3 py-1.5 rounded-xl bg-teal-500 hover:bg-teal-400 text-[11px] font-extrabold text-slate-950 flex items-center gap-1 shadow"
-            >
-              <Download className="w-3.5 h-3.5" /> Get APK
-            </a>
-          ) : (
-            <span className="px-2.5 py-1 rounded-full bg-teal-500/15 border border-teal-500/30 text-[10px] font-bold text-teal-300 flex items-center gap-1">
-              <Smartphone className="w-3 h-3 text-teal-400" />
-              <span>Native Zero-Load</span>
-            </span>
-          )}
-        </div>
-      </header>
+      <SelectModelSheet
+        open={modelSheetOpen}
+        selectedModel={settings.selectedModel}
+        effort={settings.reasoningEffort}
+        onSelectModel={(modelId) => updateSettings({ selectedModel: modelId })}
+        onSelectEffort={(eff) => updateSettings({ reasoningEffort: eff })}
+        onClose={() => setModelSheetOpen(false)}
+      />
 
-      {/* Main Content */}
-      <main className="flex-1 px-3 sm:px-4 md:py-4 pt-2 pb-20 md:pb-4 min-w-0">
-        {activeTab === 'agent' && (
-          <AgentStudio
-            settings={settings}
-            skills={skills}
-            connectors={connectors}
-            webhooks={webhooks}
-            onUpdateSettings={updateSettings}
-            onOpenSkillsHub={() => setActiveTab('skills')}
-          />
-        )}
-        {activeTab === 'skills' && (
-          <SkillsConnectorsHub
-            settings={settings}
-            skills={skills}
-            connectors={connectors}
-            webhooks={webhooks}
-            onChangeSkills={handleChangeSkills}
-            onChangeConnectors={handleChangeConnectors}
-            onChangeWebhooks={handleChangeWebhooks}
-            onUpdateSettings={updateSettings}
-          />
-        )}
-        {activeTab === 'video' && <VideoStudio settings={settings} />}
-        {activeTab === 'voice' && <VoiceCloneStudio settings={settings} />}
-        {activeTab === 'image' && <ImageStudio settings={settings} />}
-        {activeTab === 'code' && <CodeBuilderStudio settings={settings} />}
-        {activeTab === 'apk' && (
-          <ApkAndSettingsHub settings={settings} onUpdateSettings={updateSettings} />
-        )}
-      </main>
+      <ProfileSettingsSheet
+        open={profileOpen}
+        settings={settings}
+        memoriesCount={memories.length}
+        onUpdateSettings={updateSettings}
+        onOpenSkillsModal={() => setSkillsModalOpen(true)}
+        onOpenMemoryModal={() => setMemoryModalOpen(true)}
+        onOpenVoiceModal={() => setVoiceModalOpen(true)}
+        onClearHistory={() => {
+          const fresh = createEmptyThread();
+          setThreads([fresh]);
+          setActiveThreadId(fresh.id);
+        }}
+        onClose={() => setProfileOpen(false)}
+      />
 
-      {/* Mobile Bottom Dock */}
-      <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-[#050A0E] border-t border-slate-800/80 px-1 py-1.5 pb-[calc(0.35rem+env(safe-area-inset-bottom,0px))]">
-        <div className="grid grid-cols-7 gap-0.5">
-          {NAV_ITEMS.map((item) => {
-            const Icon = item.icon;
-            const active = activeTab === item.id;
-            return (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => {
-                  triggerHaptic(10);
-                  setActiveTab(item.id);
-                }}
-                className={`flex flex-col items-center justify-center py-1 rounded-xl transition ${
-                  active ? 'bg-teal-500/20 text-white' : 'text-slate-400'
-                }`}
-              >
-                <Icon className="w-4 h-4 text-teal-400" />
-                <span className="text-[9.5px] font-semibold mt-0.5">{item.shortLabel}</span>
-              </button>
-            );
-          })}
-        </div>
-      </nav>
-    </div>
+      <AssetsVaultModal
+        open={assetsOpen}
+        assets={assets}
+        onDeleteAsset={(id) => setAssets((prev) => prev.filter((a) => a.id !== id))}
+        onClose={() => setAssetsOpen(false)}
+      />
+
+      <PhoneControlModal
+        open={phoneModalOpen}
+        onClose={() => setPhoneModalOpen(false)}
+        onSendChatPrompt={(p) => setComposerDraft(p)}
+      />
+
+      <SkillsConnectorsModal
+        open={skillsModalOpen}
+        settings={settings}
+        skills={skills}
+        connectors={connectors}
+        webhooks={webhooks}
+        onChangeSkills={(next) => {
+          setSkills(next);
+          saveSkills(next);
+        }}
+        onChangeConnectors={(next) => {
+          setConnectors(next);
+          saveConnectors(next);
+        }}
+        onChangeWebhooks={(next) => {
+          setWebhooks(next);
+          saveCustomWebhooks(next);
+        }}
+        onClose={() => setSkillsModalOpen(false)}
+      />
+
+      <VoiceLabModal
+        open={voiceModalOpen}
+        settings={settings}
+        profiles={voiceProfiles}
+        onSaveProfile={handleSaveVoiceProfile}
+        onDeleteProfile={handleDeleteVoiceProfile}
+        onSelectProfile={(id) => updateSettings({ activeVoiceProfileId: id })}
+        onGeneratedClip={handleGeneratedVoiceClipFromLab}
+        onClose={() => setVoiceModalOpen(false)}
+      />
+
+      <MemoryModal
+        open={memoryModalOpen}
+        memories={memories}
+        autoMemory={settings.autoMemory !== false}
+        onToggleAutoMemory={(enabled) => updateSettings({ autoMemory: enabled })}
+        onAddMemory={(fact, cat) => {
+          handleSaveMemoryFact(fact, cat);
+        }}
+        onDeleteMemory={(id) => {
+          const next = memories.filter((m) => m.id !== id);
+          setMemories(next);
+          saveMemories(next);
+        }}
+        onClose={() => setMemoryModalOpen(false)}
+      />
+    </>
   );
 }
 

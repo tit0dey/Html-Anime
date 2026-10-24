@@ -25,6 +25,7 @@ import android.provider.MediaStore;
 import android.provider.Settings;
 import android.speech.tts.TextToSpeech;
 import android.util.Base64;
+import android.view.View;
 import android.view.ViewGroup;
 import android.view.Window;
 import android.webkit.DownloadListener;
@@ -57,16 +58,40 @@ public class MainActivity extends Activity {
     private TextToSpeech nativeTts;
     private boolean ttsReady = false;
 
+    private void applySystemBarTheme(boolean isDark) {
+        Window window = getWindow();
+        if (window != null && Build.VERSION.SDK_INT >= 21) {
+            int barColor = Color.parseColor(isDark ? "#0B0E14" : "#FFFFFF");
+            window.setStatusBarColor(barColor);
+            window.setNavigationBarColor(barColor);
+            if (Build.VERSION.SDK_INT >= 23) {
+                View decor = window.getDecorView();
+                int flags = decor.getSystemUiVisibility();
+                if (!isDark) {
+                    flags |= View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
+                    if (Build.VERSION.SDK_INT >= 26) {
+                        flags |= View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
+                    }
+                } else {
+                    flags &= ~View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
+                    if (Build.VERSION.SDK_INT >= 26) {
+                        flags &= ~View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
+                    }
+                }
+                decor.setSystemUiVisibility(flags);
+            }
+        }
+        if (webView != null) {
+            webView.setBackgroundColor(Color.parseColor(isDark ? "#0B0E14" : "#FFFFFF"));
+        }
+    }
+
     @SuppressLint({"SetJavaScriptEnabled", "AddJavascriptInterface"})
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        Window window = getWindow();
-        if (window != null && Build.VERSION.SDK_INT >= 21) {
-            window.setStatusBarColor(Color.parseColor("#050A0E"));
-            window.setNavigationBarColor(Color.parseColor("#050A0E"));
-        }
+        applySystemBarTheme(false);
 
         nativeTts = new TextToSpeech(this, new TextToSpeech.OnInitListener() {
             @Override
@@ -79,10 +104,10 @@ public class MainActivity extends Activity {
         });
 
         FrameLayout root = new FrameLayout(this);
-        root.setBackgroundColor(Color.parseColor("#050A0E"));
+        root.setBackgroundColor(Color.parseColor("#FFFFFF"));
 
         webView = new WebView(this);
-        webView.setBackgroundColor(Color.parseColor("#050A0E"));
+        webView.setBackgroundColor(Color.parseColor("#FFFFFF"));
 
         WebSettings ws = webView.getSettings();
         ws.setJavaScriptEnabled(true);
@@ -504,6 +529,16 @@ public class MainActivity extends Activity {
             } catch (Exception e) {
                 return "Email error: " + e.getMessage();
             }
+        }
+
+        @JavascriptInterface
+        public void setSystemBarTheme(final boolean isDark) {
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    applySystemBarTheme(isDark);
+                }
+            });
         }
 
         @JavascriptInterface

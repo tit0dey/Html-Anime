@@ -21,12 +21,23 @@ declare global {
       openSystemSettings: (section: string) => string;
       sendEmail: (to: string, subject: string, body: string) => string;
       copyClipboard: (text: string) => string;
+      setSystemBarTheme?: (isDark: boolean) => void;
     };
   }
 }
 
 export function isRunningInAndroidApk(): boolean {
   return typeof window !== 'undefined' && Boolean(window.OpenBrainNativeBridge);
+}
+
+export function syncNativeSystemBars(isDark: boolean): void {
+  try {
+    if (window.OpenBrainNativeBridge?.setSystemBarTheme) {
+      window.OpenBrainNativeBridge.setSystemBarTheme(isDark);
+    }
+  } catch {
+    // Ignore
+  }
 }
 
 export function triggerHaptic(ms = 16): void {

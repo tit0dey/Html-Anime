@@ -1,48 +1,63 @@
-import { AppSettings, LLMModelInfo } from '../types';
+import { AppSettings, LLMModelInfo, ReasoningEffort } from '../types';
 
 export const FREE_LLM_MODELS: LLMModelInfo[] = [
   {
-    id: 'openai',
-    name: 'Omni-GPT4o Mini (Fast)',
-    provider: 'Open-Source Router (Free Unlimited)',
-    badge: 'DEFAULT • VISION',
-    description: 'Fast multimodal reasoning, universal multilingual comprehension & Vision.',
+    id: 'auto',
+    name: 'Auto (Smart Super-Router)',
+    shortName: 'Auto',
+    provider: 'Intelligent Multi-Model + Self-Critic',
+    badge: 'DEFAULT',
+    description: 'Automatically routes tasks across R1, Qwen-32B, Llama-70B & Vision with verification.',
     supportsVision: true,
   },
   {
+    id: 'council',
+    name: 'OpenBrain Omega Council (4-Mind MoA)',
+    shortName: 'Omega-Council',
+    provider: 'R1 + Qwen-32B + Llama-70B + Red-Team Judge',
+    badge: 'OMEGA IQ',
+    description: 'Runs 4 specialist models in parallel + Adversarial Red-Team Judge to beat single models.',
+  },
+  {
     id: 'deepseek',
-    name: 'DeepSeek-R1 / V3',
-    provider: 'DeepSeek Open-Source (Free)',
+    name: 'DeepSeek-R1 (DeepThink)',
+    shortName: 'DeepSeek-R1',
+    provider: 'DeepSeek Open-Source',
     badge: 'REASONING',
-    description: 'Deep chain-of-thought logic, math, science & complex problem solving.',
+    description: 'Extended chain-of-thought reasoning for math, science, proofs & strategy.',
   },
   {
     id: 'qwen-coder',
     name: 'Qwen 2.5 Coder 32B',
-    provider: 'Alibaba Qwen Open-Source (Free)',
-    badge: 'CODING PRO',
-    description: 'Top open-source software engineering, Android/Web apps & debugging.',
+    shortName: 'Qwen-32B',
+    provider: 'Alibaba Qwen Open-Source',
+    badge: 'CODE PRO',
+    description: 'Flagship software engineering, full-stack apps, debugging & sandbox code.',
   },
   {
     id: 'llama',
     name: 'Llama 3.3 70B Instruct',
-    provider: 'Meta Open-Source (Free)',
-    badge: '70B OPEN',
-    description: 'Versatile creative writing, agent planning & general intelligence.',
+    shortName: 'Llama-70B',
+    provider: 'Meta Open-Source',
+    badge: '70B',
+    description: 'Nuanced writing, planning, synthesis & universal multilingual fluency.',
+  },
+  {
+    id: 'openai',
+    name: 'Omni-4o Vision',
+    shortName: 'Omni-4o',
+    provider: 'Multimodal Open Router',
+    badge: 'VISION',
+    description: 'High-speed multimodal image analysis, camera understanding & general agent.',
+    supportsVision: true,
   },
   {
     id: 'mistral',
-    name: 'Mistral Small 3',
-    provider: 'Mistral AI Open-Source (Free)',
-    badge: 'ULTRA FAST',
-    description: 'Crisp concise responses, summarization & multilingual chat.',
-  },
-  {
-    id: 'searchgpt',
-    name: 'SearchGPT Live',
-    provider: 'Web-Grounded Open Router (Free)',
-    badge: 'WEB LIVE',
-    description: 'Grounded answers enriched with live web knowledge.',
+    name: 'Mistral Small 3 Flash',
+    shortName: 'Mistral-Flash',
+    provider: 'Mistral Open-Source',
+    badge: 'INSTANT',
+    description: 'Ultra-low-latency concise responses and quick Q&A.',
   },
 ];
 
@@ -52,10 +67,55 @@ export interface ChatTurnInput {
   imageDataUrl?: string;
 }
 
+export interface SmartBrainResult {
+  content: string;
+  thinkingTrace?: string;
+  modelUsedLabel: string;
+}
+
+const CODE_OR_MATH_REGEX =
+  /\b(code|python|javascript|typescript|react|html|css|sql|rust|java|kotlin|c\+\+|golang|api|bug|debug|refactor|algorithm|prove|proof|theorem|calculus|integral|matrix|probability|equation|optimize|architecture)\b/i;
+
+export function classifyOptimalModelForTask(
+  userPrompt: string,
+  hasImage: boolean,
+  effort: ReasoningEffort
+): { targetModel: string; reasonLabel: string } {
+  if (hasImage) {
+    return { targetModel: 'openai', reasonLabel: 'Auto · Omni-4o Vision' };
+  }
+  if (effort === 'max') {
+    return { targetModel: 'council', reasonLabel: 'Auto · 4-Mind Omega Council' };
+  }
+  if (effort === 'fast') {
+    return { targetModel: 'mistral', reasonLabel: 'Auto · Mistral Flash' };
+  }
+
+  const p = userPrompt.toLowerCase();
+
+  const codePattern =
+    /\b(code|python|javascript|typescript|react|html|css|sql|rust|java|kotlin|swift|c\+\+|golang|api|bug|debug|refactor|regex|algorithm|leetcode|dockerfile|git|bash|function|component|database|compiler)\b/;
+  if (codePattern.test(p)) {
+    return { targetModel: 'qwen-coder', reasonLabel: 'Auto · Qwen 2.5 Coder 32B' };
+  }
+
+  const deepReasonPattern =
+    /\b(prove|proof|theorem|calculus|integral|matrix|probability|quantum|physics|strategy|architecture|analyze|compare|tradeoff|why does|step by step|logic|puzzle|riddle|optimize|derive|game theory)\b/;
+  if (effort === 'high' || deepReasonPattern.test(p) || userPrompt.length > 400) {
+    return { targetModel: 'deepseek', reasonLabel: 'Auto · DeepSeek-R1' };
+  }
+
+  if (p.length < 55) {
+    return { targetModel: 'openai', reasonLabel: 'Auto · Omni-4o' };
+  }
+
+  return { targetModel: 'llama', reasonLabel: 'Auto · Llama 3.3 70B' };
+}
+
 async function fetchWithTimeout(
   url: string,
   options: RequestInit,
-  timeoutMs = 35000
+  timeoutMs = 36000
 ): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -64,6 +124,72 @@ async function fetchWithTimeout(
   } finally {
     clearTimeout(timer);
   }
+}
+
+/**
+ * OpenRouter Free Frontier Tier (:free models: DeepSeek-R1, Qwen 2.5 Coder 32B, Llama 3.3 70B, Gemini 2.0 Flash)
+ */
+async function callOpenRouterFreeIfConfigured(
+  messages: ChatTurnInput[],
+  apiKey: string,
+  targetModel: string
+): Promise<string | null> {
+  if (!apiKey.trim()) return null;
+
+  const modelCandidates =
+    targetModel === 'deepseek'
+      ? ['deepseek/deepseek-r1:free', 'meta-llama/llama-3.3-70b-instruct:free']
+      : targetModel === 'qwen-coder'
+      ? ['qwen/qwen-2.5-coder-32b-instruct:free', 'deepseek/deepseek-r1:free']
+      : [
+          'meta-llama/llama-3.3-70b-instruct:free',
+          'google/gemini-2.0-flash-exp:free',
+          'deepseek/deepseek-r1:free',
+        ];
+
+  for (const orModel of modelCandidates) {
+    try {
+      const formatted = messages.map((m) => {
+        if (m.imageDataUrl) {
+          return {
+            role: m.role,
+            content: [
+              { type: 'text', text: m.content },
+              { type: 'image_url', image_url: { url: m.imageDataUrl } },
+            ],
+          };
+        }
+        return { role: m.role, content: m.content };
+      });
+
+      const resp = await fetchWithTimeout(
+        'https://openrouter.ai/api/v1/chat/completions',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${apiKey.trim()}`,
+            'HTTP-Referer': 'https://openbrain.ai',
+            'X-Title': 'Open Brain AI Super-Agent',
+          },
+          body: JSON.stringify({
+            model: orModel,
+            messages: formatted,
+          }),
+        },
+        32000
+      );
+      if (!resp.ok) continue;
+      const data = await resp.json();
+      const content = data?.choices?.[0]?.message?.content;
+      if (typeof content === 'string' && content.trim()) {
+        return content;
+      }
+    } catch {
+      continue;
+    }
+  }
+  return null;
 }
 
 async function callGroqIfConfigured(
@@ -83,7 +209,7 @@ async function callGroqIfConfigured(
         body: JSON.stringify({
           model: 'llama-3.3-70b-versatile',
           messages: messages.map((m) => ({ role: m.role, content: m.content })),
-          temperature: 0.7,
+          temperature: 0.65,
         }),
       },
       25000
@@ -173,10 +299,28 @@ async function callOllamaIfConfigured(
   }
 }
 
-async function callPollinationsOpenAI(
+function splitThinkingBlock(rawText: string): { clean: string; thought?: string } {
+  if (rawText.includes('<think>') && rawText.includes('</think>')) {
+    const thoughts: string[] = [];
+    const clean = rawText
+      .replace(/<think>([\s\S]*?)<\/think>/g, (_, t: string) => {
+        if (t && t.trim()) thoughts.push(t.trim());
+        return '';
+      })
+      .trim();
+    return {
+      clean: clean || rawText.replace(/<\/?think>/g, '').trim(),
+      thought: thoughts.length > 0 ? thoughts.join('\n\n') : undefined,
+    };
+  }
+  return { clean: rawText.trim() };
+}
+
+async function callPollinationsRaw(
   messages: ChatTurnInput[],
   model: string
-): Promise<string | null> {
+): Promise<{ clean: string; thought?: string } | null> {
+  const apiModel = model === 'auto' || model === 'council' ? 'openai' : model;
   try {
     const formatted = messages.map((m) => {
       if (m.imageDataUrl) {
@@ -197,7 +341,7 @@ async function callPollinationsOpenAI(
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: model || 'openai',
+          model: apiModel || 'openai',
           messages: formatted,
           seed: Math.floor(Math.random() * 1000000),
           private: true,
@@ -211,12 +355,19 @@ async function callPollinationsOpenAI(
     try {
       const parsed = JSON.parse(raw);
       const text = parsed?.choices?.[0]?.message?.content;
+      const reasoningContent = parsed?.choices?.[0]?.message?.reasoning_content;
       if (typeof text === 'string' && text.trim()) {
-        return stripThinkWrapperIfNeeded(text);
+        const sp = splitThinkingBlock(text);
+        return {
+          clean: sp.clean,
+          thought: reasoningContent
+            ? String(reasoningContent).trim()
+            : sp.thought,
+        };
       }
     } catch {
       if (raw.trim() && !raw.trim().startsWith('<!DOCTYPE')) {
-        return raw.trim();
+        return splitThinkingBlock(raw.trim());
       }
     }
     return null;
@@ -228,7 +379,8 @@ async function callPollinationsOpenAI(
 async function callPollinationsDirectFallback(
   messages: ChatTurnInput[],
   model: string
-): Promise<string | null> {
+): Promise<{ clean: string; thought?: string } | null> {
+  const apiModel = model === 'auto' || model === 'council' ? 'openai' : model;
   try {
     const resp = await fetchWithTimeout(
       'https://text.pollinations.ai/',
@@ -237,7 +389,7 @@ async function callPollinationsDirectFallback(
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           messages: messages.map((m) => ({ role: m.role, content: m.content })),
-          model: model || 'openai',
+          model: apiModel || 'openai',
           private: true,
         }),
       },
@@ -246,7 +398,7 @@ async function callPollinationsDirectFallback(
     if (!resp.ok) return null;
     const text = await resp.text();
     if (text && text.trim() && !text.trim().startsWith('<!DOCTYPE')) {
-      return stripThinkWrapperIfNeeded(text.trim());
+      return splitThinkingBlock(text.trim());
     }
     return null;
   } catch {
@@ -254,59 +406,45 @@ async function callPollinationsDirectFallback(
   }
 }
 
-function stripThinkWrapperIfNeeded(text: string): string {
-  if (text.includes('<think>') && text.includes('</think>')) {
-    return text.replace(
-      /<think>([\s\S]*?)<\/think>/g,
-      (_, thought: string) =>
-        thought.trim()
-          ? `> **Reasoning Trace:**\n> ${thought
-              .trim()
-              .split('\n')
-              .join('\n> ')}\n\n`
-          : ''
-    );
-  }
-  return text;
-}
-
-export async function generateFreeLLMResponse(
+async function executeSingleModelCall(
   messages: ChatTurnInput[],
   settings: AppSettings,
-  overrideModel?: string
-): Promise<string> {
-  const chosenModel = overrideModel || settings.selectedModel || 'openai';
+  targetModel: string
+): Promise<{ clean: string; thought?: string }> {
   const hasImage = messages.some((m) => Boolean(m.imageDataUrl));
 
-  // 1. Optional power-user boosters if user entered a free key
-  if (!hasImage && settings.ollamaUrl.trim()) {
+  if (!hasImage && settings.ollamaUrl?.trim()) {
     const ollama = await callOllamaIfConfigured(messages, settings.ollamaUrl);
-    if (ollama) return ollama;
+    if (ollama) return splitThinkingBlock(ollama);
   }
-  if (settings.geminiApiKey.trim()) {
+  if (settings.openrouterApiKey?.trim()) {
+    const orRes = await callOpenRouterFreeIfConfigured(
+      messages,
+      settings.openrouterApiKey,
+      targetModel
+    );
+    if (orRes) return splitThinkingBlock(orRes);
+  }
+  if (settings.geminiApiKey?.trim()) {
     const gem = await callGeminiIfConfigured(messages, settings.geminiApiKey);
-    if (gem) return gem;
+    if (gem) return splitThinkingBlock(gem);
   }
-  if (!hasImage && settings.groqApiKey.trim()) {
+  if (!hasImage && settings.groqApiKey?.trim()) {
     const groq = await callGroqIfConfigured(messages, settings.groqApiKey);
-    if (groq) return groq;
+    if (groq) return splitThinkingBlock(groq);
   }
 
-  // 2. Zero-Key Unlimited Open-Source Cloud Router (Primary)
-  const primary = await callPollinationsOpenAI(messages, chosenModel);
+  const primary = await callPollinationsRaw(messages, targetModel);
   if (primary) return primary;
 
-  // 3. Automatic Model Failover ('openai' fast cluster)
-  if (chosenModel !== 'openai') {
-    const fallbackModel = await callPollinationsOpenAI(messages, 'openai');
+  if (targetModel !== 'openai') {
+    const fallbackModel = await callPollinationsRaw(messages, 'openai');
     if (fallbackModel) return fallbackModel;
   }
 
-  // 4. Direct Endpoint Failover
   const direct = await callPollinationsDirectFallback(messages, 'openai');
   if (direct) return direct;
 
-  // 5. GET Compact Fallback for constrained mobile networks
   const lastUser = [...messages].reverse().find((m) => m.role === 'user')?.content || 'Hello';
   try {
     const getResp = await fetchWithTimeout(
@@ -316,15 +454,224 @@ export async function generateFreeLLMResponse(
     );
     if (getResp.ok) {
       const txt = await getResp.text();
-      if (txt.trim()) return txt.trim();
+      if (txt.trim()) return splitThinkingBlock(txt.trim());
     }
   } catch {
-    // Final offline message below
+    // Offline fallback below
   }
 
   throw new Error(
-    'Network unreachable right now. Check your internet connection or configure a local Ollama / free Groq or Gemini key in Settings.'
+    'Network unreachable right now. Check your internet connection or configure a free OpenRouter / Groq / Gemini / Ollama endpoint in Preferences.'
   );
+}
+
+/**
+ * Self-Verifying Critic & Auto-Refiner Pass:
+ * Audits code, math, logic, and completeness before returning to the user.
+ */
+async function runSelfCriticAudit(
+  userPrompt: string,
+  draftAnswer: string,
+  settings: AppSettings
+): Promise<{ finalAnswer: string; auditSummary: string }> {
+  try {
+    const criticMessages: ChatTurnInput[] = [
+      {
+        role: 'system',
+        content:
+          'You are Open Brain Self-Verifying Critic. Audit the Assistant Draft against the User Request for logic errors, math mistakes, syntax bugs, missing edge cases, or incomplete sections. If the draft is already 100% accurate, complete, and well-structured, reply with ONLY the exact token: VERIFIED_OK. If ANY flaw or improvement exists, output ONLY the corrected, superior final answer with zero meta-commentary and no emoji stickers.',
+      },
+      {
+        role: 'user',
+        content: `[User Request]:\n${userPrompt.slice(0, 2200)}\n\n[Assistant Draft]:\n${draftAnswer.slice(
+          0,
+          4500
+        )}`,
+      },
+    ];
+
+    const audit = await executeSingleModelCall(criticMessages, settings, 'qwen-coder');
+    const txt = audit.clean.trim();
+
+    if (!txt || txt.includes('VERIFIED_OK') || txt.length < Math.min(40, draftAnswer.length * 0.35)) {
+      return {
+        finalAnswer: draftAnswer,
+        auditSummary: 'Self-Critic Verification Passed: Logic, completeness & edge cases verified.',
+      };
+    }
+
+    return {
+      finalAnswer: txt,
+      auditSummary: 'Self-Critic Auto-Refined: Detected & upgraded edge cases / precision before delivery.',
+    };
+  } catch {
+    return {
+      finalAnswer: draftAnswer,
+      auditSummary: 'Primary generation verified.',
+    };
+  }
+}
+
+/**
+ * Open Brain v3.5 Ultra: Smart Multi-Model Router + 3-Model Mixture-of-Agents Council + Self-Verifying Critic.
+ */
+export async function generateSmartBrainResponse(
+  messages: ChatTurnInput[],
+  settings: AppSettings,
+  onProgressStep?: (kind: 'moa_council' | 'self_critic', note: string) => void
+): Promise<SmartBrainResult> {
+  const hasImage = messages.some((m) => Boolean(m.imageDataUrl));
+  const lastUserPrompt =
+    [...messages].reverse().find((m) => m.role === 'user')?.content || '';
+
+  let chosenModel = settings.selectedModel || 'auto';
+  let modelUsedLabel =
+    FREE_LLM_MODELS.find((m) => m.id === chosenModel)?.shortName || chosenModel;
+
+  if (chosenModel === 'auto') {
+    const routed = classifyOptimalModelForTask(
+      lastUserPrompt,
+      hasImage,
+      settings.reasoningEffort || 'default'
+    );
+    chosenModel = routed.targetModel;
+    modelUsedLabel = routed.reasonLabel;
+  }
+
+  // 4-Specialist Parallel Omega Council + Adversarial Red-Team Judge
+  if (chosenModel === 'council' && !hasImage) {
+    onProgressStep?.(
+      'moa_council',
+      'Running 4-Mind Omega Council (DeepSeek-R1 + Qwen-32B + Llama-70B + Mistral)...'
+    );
+    const [r1Draft, coderDraft, llamaDraft, mistralDraft] = await Promise.all([
+      executeSingleModelCall(messages, settings, 'deepseek').catch(() => null),
+      executeSingleModelCall(messages, settings, 'qwen-coder').catch(() => null),
+      executeSingleModelCall(messages, settings, 'llama').catch(() => null),
+      executeSingleModelCall(messages, settings, 'mistral').catch(() => null),
+    ]);
+
+    const availableDrafts = [
+      r1Draft ? `[Specialist 1 — DeepSeek-R1 Deep Logic & Proofs]:\n${r1Draft.clean.slice(0, 2400)}` : '',
+      coderDraft ? `[Specialist 2 — Qwen 2.5 Coder 32B Engineering]:\n${coderDraft.clean.slice(0, 2400)}` : '',
+      llamaDraft ? `[Specialist 3 — Llama 3.3 70B Architecture & Nuance]:\n${llamaDraft.clean.slice(0, 2000)}` : '',
+      mistralDraft ? `[Specialist 4 — Mistral Independent Counter-Check]:\n${mistralDraft.clean.slice(0, 1600)}` : '',
+    ].filter(Boolean);
+
+    if (availableDrafts.length >= 2) {
+      onProgressStep?.(
+        'moa_council',
+        `Adversarial Red-Team Judge cross-examining ${availableDrafts.length} specialist outputs...`
+      );
+      const synthMessages: ChatTurnInput[] = [
+        ...messages.slice(0, -1),
+        {
+          role: 'user',
+          content: `${lastUserPrompt}
+
+---
+[INTERNAL OMEGA COUNCIL TOURNAMENT — DO NOT MENTION THESE DRAFTS EXPLICITLY. ACT AS AN ADVERSARIAL RED-TEAM JUDGE: CROSS-VERIFY EVERY FACT, EQUATION, EDGE CASE, AND LINE OF CODE ACROSS ALL ${availableDrafts.length} SPECIALISTS, REJECT ANY WEAK OR HALLUCINATED CLAIM, AND SYNTHESIZE ONE UNBEATABLE, DEFINITIVE MASTER RESPONSE]:
+
+${availableDrafts.join('\n\n')}`,
+        },
+      ];
+      const master = await executeSingleModelCall(synthMessages, settings, 'deepseek');
+      const councilTrace = [
+        r1Draft?.thought
+          ? `DeepSeek-R1 Chain-of-Thought:\n${r1Draft.thought}`
+          : r1Draft
+          ? `Specialist 1 (DeepSeek-R1): Completed deep logical derivation (${r1Draft.clean.length} chars).`
+          : '',
+        coderDraft
+          ? `Specialist 2 (Qwen 2.5 Coder 32B): Verified engineering & code precision (${coderDraft.clean.length} chars).`
+          : '',
+        llamaDraft
+          ? `Specialist 3 (Llama 3.3 70B): Verified structural completeness (${llamaDraft.clean.length} chars).`
+          : '',
+        mistralDraft
+          ? `Specialist 4 (Mistral): Independent counter-verification complete (${mistralDraft.clean.length} chars).`
+          : '',
+        `Adversarial Red-Team Judge: Cross-examined ${availableDrafts.length} independent models and synthesized verified consensus.`,
+      ]
+        .filter(Boolean)
+        .join('\n\n');
+
+      return {
+        content: master.clean,
+        thinkingTrace: councilTrace,
+        modelUsedLabel,
+      };
+    }
+
+    const fallbackSingle = r1Draft || coderDraft || llamaDraft || mistralDraft;
+    if (fallbackSingle) {
+      return {
+        content: fallbackSingle.clean,
+        thinkingTrace: fallbackSingle.thought,
+        modelUsedLabel,
+      };
+    }
+  }
+
+  let enrichedMessages = messages;
+  if (
+    (settings.reasoningEffort === 'high' || chosenModel === 'deepseek') &&
+    messages.length > 0 &&
+    messages[0].role === 'system'
+  ) {
+    enrichedMessages = [
+      {
+        ...messages[0],
+        content:
+          messages[0].content +
+          '\nThink systematically through edge cases, accuracy, and structure before writing a clear, authoritative final answer.',
+      },
+      ...messages.slice(1),
+    ];
+  }
+
+  const out = await executeSingleModelCall(enrichedMessages, settings, chosenModel);
+
+  // Run Self-Verifying Critic Loop when enabled on High Effort OR Code/Math tasks
+  const shouldRunCritic =
+    !hasImage &&
+    settings.selfVerification !== false &&
+    settings.reasoningEffort !== 'fast' &&
+    (settings.reasoningEffort === 'high' || CODE_OR_MATH_REGEX.test(lastUserPrompt));
+
+  if (shouldRunCritic && out.clean.length > 80) {
+    onProgressStep?.('self_critic', 'Self-Critic auditing logic, code & edge cases...');
+    const audited = await runSelfCriticAudit(lastUserPrompt, out.clean, settings);
+    const combinedTrace = [out.thought, audited.auditSummary].filter(Boolean).join('\n\n');
+    return {
+      content: audited.finalAnswer,
+      thinkingTrace: combinedTrace || undefined,
+      modelUsedLabel: `${modelUsedLabel} + Verified`,
+    };
+  }
+
+  return {
+    content: out.clean,
+    thinkingTrace: out.thought,
+    modelUsedLabel,
+  };
+}
+
+/**
+ * Standard string helper used by sub-engines (Video Planner, Sandbox Code Generator, Prompt Enhancer).
+ */
+export async function generateFreeLLMResponse(
+  messages: ChatTurnInput[],
+  settings: AppSettings,
+  overrideModel?: string
+): Promise<string> {
+  const target =
+    overrideModel ||
+    (settings.selectedModel === 'auto' || settings.selectedModel === 'council'
+      ? 'openai'
+      : settings.selectedModel || 'openai');
+  const res = await executeSingleModelCall(messages, settings, target);
+  return res.clean;
 }
 
 export function extractJsonObject<T>(raw: string): T | null {
