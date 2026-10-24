@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '../..');
 const ANDROID_MAIN = path.join(REPO_ROOT, 'android/app/src/main');
-const WORK_DIR = '/tmp/openbrain-apk-work';
+const WORK_DIR = '/tmp/htmlanime-apk-work';
 const TOOLCHAIN = '/tmp/android-toolchain';
 
 const JAVA = `${TOOLCHAIN}/venv/lib/python3.11/site-packages/jdk4py/java-runtime/bin/java`;
@@ -17,13 +17,10 @@ const ECJ_JAR = `${TOOLCHAIN}/java2dex/app/biblis/ecj-4.8.jar`;
 const DEXER_JAR = `${TOOLCHAIN}/java2dex/app/biblis/dfoda0.0.9.jar`;
 const APKSIGNER_JAR = `${TOOLCHAIN}/node_modules/@postar/apktool-node/lib/apksigner.jar`;
 
-console.log('🚀 [1/7] Building production Open Brain Web Bundle...');
-const publicApkPath = path.join(REPO_ROOT, 'public/OpenBrain-AI.apk');
-if (fs.existsSync(publicApkPath)) fs.unlinkSync(publicApkPath);
+console.log('[1/7] Building production HTML-Anime Studio Web Bundle...');
+execSync('./node_modules/.bin/vite build', { cwd: REPO_ROOT, stdio: 'inherit' });
 
-execSync('npx vite build', { cwd: REPO_ROOT, stdio: 'inherit' });
-
-console.log('📦 [2/7] Creating self-contained Featherlight Android WebView Asset Bundle...');
+console.log('[2/7] Creating self-contained Android WebView Asset Bundle...');
 const distDir = path.join(REPO_ROOT, 'dist');
 const assetsPublicDir = path.join(ANDROID_MAIN, 'assets/public');
 fs.rmSync(assetsPublicDir, { recursive: true, force: true });
@@ -52,13 +49,14 @@ if (jsFile) {
 }
 
 fs.writeFileSync(path.join(assetsPublicDir, 'index.html'), html, 'utf8');
-fs.copyFileSync(path.join(REPO_ROOT, 'public/icon.svg'), path.join(assetsPublicDir, 'icon.svg'));
-fs.copyFileSync(
-  path.join(REPO_ROOT, 'public/manifest.json'),
-  path.join(assetsPublicDir, 'manifest.json')
-);
+for (const staticName of ['logo.png', 'icon.svg', 'manifest.json']) {
+  const srcStatic = path.join(REPO_ROOT, 'public', staticName);
+  if (fs.existsSync(srcStatic)) {
+    fs.copyFileSync(srcStatic, path.join(assetsPublicDir, staticName));
+  }
+}
 
-console.log('🛠️  [3/7] Compiling Android resources & Manifest via AAPT2...');
+console.log('[3/7] Compiling Android resources & Manifest via AAPT2...');
 fs.rmSync(WORK_DIR, { recursive: true, force: true });
 fs.mkdirSync(path.join(WORK_DIR, 'gen_r'), { recursive: true });
 fs.mkdirSync(path.join(WORK_DIR, 'classes'), { recursive: true });
@@ -91,9 +89,12 @@ execFileSync(AAPT2, [
   compiledResZip,
 ]);
 
-console.log('☕ [4/7] Compiling OpenBrainNativeBridge (MainActivity + R.java) -> Dalvik classes.dex...');
-const rJava = path.join(WORK_DIR, 'gen_r/com/openbrain/ai/R.java');
-const mainJava = path.join(ANDROID_MAIN, 'java/com/openbrain/ai/MainActivity.java');
+console.log('[4/7] Compiling HtmlAnimeNativeBridge (MainActivity + R.java) -> classes.dex...');
+const rJava = path.join(WORK_DIR, 'gen_r/com/htmlanime/studio/R.java');
+const mainJava = path.join(
+  ANDROID_MAIN,
+  'java/com/htmlanime/studio/MainActivity.java'
+);
 
 execFileSync(
   JAVA,
@@ -136,7 +137,7 @@ execFileSync(
   { stdio: 'inherit' }
 );
 
-console.log('📐 [5/7] Merging classes.dex & applying strict 4-byte Android 11–16 zipalign...');
+console.log('[5/7] Merging classes.dex & applying strict 4-byte Android 11-16 zipalign...');
 const alignedApk = path.join(WORK_DIR, 'aligned_unsigned.apk');
 
 execFileSync('python3', [
@@ -250,15 +251,15 @@ print("Aligned APK written cleanly with", len(entries), "entries.")
 `,
 ]);
 
-console.log('🔐 [6/7] Signing OpenBrain-AI.apk with V2 + V3 Android Signatures...');
-const keystorePath = path.join(WORK_DIR, 'openbrain-release.jks');
+console.log('[6/7] Signing HTML-Anime-Studio.apk with V1 + V2 + V3 Android Signatures...');
+const keystorePath = path.join(WORK_DIR, 'htmlanime-release.jks');
 execFileSync(KEYTOOL, [
   '-genkeypair',
   '-v',
   '-keystore',
   keystorePath,
   '-alias',
-  'openbrain',
+  'htmlanime',
   '-keyalg',
   'RSA',
   '-keysize',
@@ -266,14 +267,14 @@ execFileSync(KEYTOOL, [
   '-validity',
   '10000',
   '-storepass',
-  'openbrain123',
+  'htmlanime123',
   '-keypass',
-  'openbrain123',
+  'htmlanime123',
   '-dname',
-  'CN=Open Brain AI, OU=OpenSource, O=OpenBrain, L=Kolkata, ST=WB, C=IN',
+  'CN=HTML Anime Studio, OU=Studio, O=HTMLAnime, L=Kolkata, ST=WB, C=IN',
 ]);
 
-const signedApkOut = path.join(WORK_DIR, 'OpenBrain-AI.apk');
+const signedApkOut = path.join(WORK_DIR, 'HTML-Anime-Studio.apk');
 execFileSync(
   JAVA,
   [
@@ -283,11 +284,11 @@ execFileSync(
     '--ks',
     keystorePath,
     '--ks-key-alias',
-    'openbrain',
+    'htmlanime',
     '--ks-pass',
-    'pass:openbrain123',
+    'pass:htmlanime123',
     '--key-pass',
-    'pass:openbrain123',
+    'pass:htmlanime123',
     '--v1-signing-enabled',
     'true',
     '--v2-signing-enabled',
@@ -301,7 +302,7 @@ execFileSync(
   { stdio: 'inherit' }
 );
 
-console.log('✅ [7/7] Verifying OpenBrain-AI.apk Cryptographic Signature & Manifest...');
+console.log('[7/7] Verifying HTML-Anime-Studio.apk Cryptographic Signature & Manifest...');
 const verifyOut = execFileSync(JAVA, [
   '-jar',
   APKSIGNER_JAR,
@@ -316,9 +317,10 @@ console.log(badgingOut.split('\n').slice(0, 6).join('\n'));
 
 const repoApkDir = path.join(REPO_ROOT, 'apk');
 fs.mkdirSync(repoApkDir, { recursive: true });
-fs.copyFileSync(signedApkOut, path.join(repoApkDir, 'OpenBrain-AI.apk'));
-fs.copyFileSync(signedApkOut, path.join(REPO_ROOT, 'public/OpenBrain-AI.apk'));
-fs.copyFileSync(signedApkOut, path.join(REPO_ROOT, 'dist/OpenBrain-AI.apk'));
+fs.copyFileSync(signedApkOut, path.join(repoApkDir, 'HTML-Anime-Studio.apk'));
+fs.copyFileSync(signedApkOut, path.join(REPO_ROOT, 'dist/HTML-Anime-Studio.apk'));
 
 const sizeMb = (fs.statSync(signedApkOut).size / (1024 * 1024)).toFixed(2);
-console.log(`🎉 SUCCESS! Signed OpenBrain-AI.apk ready at apk/OpenBrain-AI.apk (${sizeMb} MB)`);
+console.log(
+  `SUCCESS! Signed HTML-Anime-Studio.apk ready at apk/HTML-Anime-Studio.apk (${sizeMb} MB)`
+);

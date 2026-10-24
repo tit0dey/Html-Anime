@@ -1,15 +1,14 @@
 {
-  "name": "Open Brain",
-  "short_name": "Open Brain",
-  "description": "Free and Unlimited Autonomous AI Super-Agent with Auto Multi-Model Routing, Skills, Connectors, MP4 Video Sandbox, Voice Cloning & Phone Control",
-  "start_url": "./index.html",
+  "name": "HTML-Anime Studio",
+  "short_name": "HTML-Anime",
+  "description": "Turn any topic, scene, or full story into a rendered MP4 anime film — custom duration, 16:9 or 9:16, 100% free & unlimited.",
+  "start_url": "/",
   "display": "standalone",
-  "orientation": "portrait-primary",
-  "background_color": "#FFFFFF",
-  "theme_color": "#FFFFFF",
+  "background_color": "#0B0E17",
+  "theme_color": "#0B0E17",
   "icons": [
     {
-      "src": "./icon.svg",
+      "src": "/icon.svg",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any maskable"

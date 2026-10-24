@@ -1,9 +1,9 @@
 {
-  "name": "open-brain",
-  "version": "4.5.0",
+  "name": "html-anime-studio",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Open Brain — Free & Unlimited Super-Agent with Claude-Style Skills, MCP Connectors, Code-to-MP4 Sandbox Video Renderer, Zero-Shot Voice Cloning, Android Phone Control & Featherlight APK",
+  "description": "HTML-Anime Studio — Self-Rendering Code-Drawn Anime & Motion Film Generator to MP4 (Custom Duration, 16:9 & 9:16, 100% Free & Unlimited, Web + Android APK)",
   "scripts": {
     "dev": "vite --host 0.0.0.0 --port 5173",
     "build": "vite build",
