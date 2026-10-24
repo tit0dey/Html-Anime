@@ -1,58 +1,59 @@
 <div align="center">
 
-<img src="./public/icon.svg" width="110" height="110" alt="Open Brain Logo" />
+<img src="./public/icon.svg" width="108" height="108" alt="Open Brain Logo" />
 
-# Open Brain
-### **100% Free, Unlimited & Zero-Phone-Pressure AI Super-Agent + Native Android APK**
+# Open Brain v3.0
+### **100% Free, Unlimited & Zero-Phone-Pressure Autonomous AI Super-Agent + Android APK**
 
-[![Android APK](https://img.shields.io/badge/Android_APK-OpenBrain_v2.0_Signed-14B8A6?style=for-the-badge&logo=android&logoColor=white)](./apk/OpenBrain-AI.apk)
-[![Zero Phone Pressure](https://img.shields.io/badge/Featherlight-~190_KB_•_0%25_Phone_Lag-0D9488?style=for-the-badge)](#)
-[![Free Unlimited](https://img.shields.io/badge/100%25_Free-Unlimited_Zero_API_Key-0F766E?style=for-the-badge)](#)
+[![Download Android APK](https://img.shields.io/badge/Download_APK-OpenBrain_v3.0_Signed-111827?style=for-the-badge&logo=android&logoColor=white)](https://github.com/tit0dey/TradeIQ/raw/main/apk/OpenBrain-AI.apk)
+[![Zero Phone Pressure](https://img.shields.io/badge/Featherlight-~195_KB_•_0%25_Phone_Lag-0F766E?style=for-the-badge)](#)
+[![Free Unlimited](https://img.shields.io/badge/100%25_Free-Auto_Multi--Agent_+_Council_MoA-14B8A6?style=for-the-badge)](#)
 
-**Claude-Style Skills (`SKILL.md`) • Live MCP Connectors • Code-to-MP4 Sandbox Video Renderer • Android Phone OS Control • Zero-Shot Voice Cloning • Flux.1 HD Art**
+**Unified Chat-First Super-Agent • Auto Smart Multi-Model Router • Mixture-of-Agents Council • Code-to-MP4 & Cinema Video • Zero-Shot Voice Cloning • Flux.1 HD Art • Skills & MCP Connectors • Native Android Phone Control**
 
 </div>
 
 ---
 
-## Direct Android APK Download
+## Direct 1-Tap Android APK Download
 
-Your ready-to-install **Featherlight (~190 KB), Zero-Phone-Pressure, V2+V3 Signed Android APK** is located directly inside this repository:
+Click the direct raw link below in **Chrome** (or tap **Download** from the `⋮` menu in the GitHub mobile app) to download and install **`OpenBrain-AI.apk`** directly on your phone:
 
-**[Download `OpenBrain-AI.apk` (`apk/OpenBrain-AI.apk`)](./apk/OpenBrain-AI.apk)**
+**[Direct Download `OpenBrain-AI.apk` (v3.0 Signed)](https://github.com/tit0dey/TradeIQ/raw/main/apk/OpenBrain-AI.apk)**
 
-### Phone Installation Steps:
-1. Open **[`apk/OpenBrain-AI.apk`](./apk/OpenBrain-AI.apk)** and tap **Download raw file** (or tap **Get APK** inside the web app).
-2. Open the downloaded `.apk` file on your Android device and tap **Install** (Package: `com.openbrain.ai`, compatible with Android 7.0 through Android 16+).
-3. **Zero Phone Pressure**: The app weighs under 200 KB, stores zero heavy local AI model files on your phone, and suspends timers automatically via `onPause()` for **0% background battery and CPU drain**.
+- **Package**: `com.openbrain.ai` (`versionName: 3.0.0`, `versionCode: 3`, Android 7.0 – Android 16+)
+- **Featherlight Footprint**: Under 200 KB with **0 MB local model bloat** and automatic `onPause()` WebView suspension for **0% background battery drain**.
 
 ---
 
-## Core Capabilities
+## What Makes Open Brain v3.0 Unmatched
 
-| Module | Capabilities | Open-Source Engines |
-| :--- | :--- | :--- |
-| **Claude-Style Code to Sandbox `.MP4` Video** | Writes deterministic JavaScript Canvas2D / Manim-style animation code, validates & executes it in Sandbox, and muxes real H.264 `.mp4` video via hardware `VideoEncoder` + `mp4-muxer` in ~2 seconds. Includes live code editor & re-rendering. | `Qwen 2.5 Coder 32B` + WebCodecs Hardware H.264 + `mp4-muxer` + Flux Cinema Director + `Wan2.1` / `LTX-Video` |
-| **Claude-Style Modular Skills (`SKILL.md`)** | 7 built-in Pro Skills + Custom Skill Creator, AI Auto-Write Skill, and `.md` (`SKILL.md`) file importer. | Dynamic Cortex Skill Injection |
-| **Live App & MCP Connectors** | 8 live connectors (**Android Phone OS**, **GitHub**, **Live Web/Wiki/DDG**, **Open-Meteo Weather**, **CoinGecko Markets**, **ArXiv Papers**, **Reddit/HN Pulse**, **HuggingFace ZeroGPU**) + **Custom Webhook / MCP HTTP Bridge** (n8n, Telegram, Slack, Notion). | Zero-Key Open REST + Custom HTTP/MCP Webhooks |
-| **Full Android Phone Control** | Control system Alarms, Countdown Timers, WhatsApp, SMS, Phone Dialer, Calendar Reminders, Google Maps, YouTube, System Settings (Wi-Fi/Bluetooth/Sound/Display/Battery), Battery/Thermal monitor, and Scoped Storage saving to `Downloads/OpenBrain/`. | Native `OpenBrainNativeBridge` (`MainActivity.java`) |
-| **Universal Multilingual Input** | Clean English interface while effortlessly understanding user messages typed or spoken in **any language** (English, Banglish, Bengali, Hindi, Spanish, Arabic, Japanese, and 100+ more). | **DeepSeek-R1**, **Qwen 2.5 Coder 32B**, **Llama 3.3 70B**, **Mistral**, **Omni-GPT4o Vision** |
-| **Zero-Shot Voice Cloning Lab & Flux.1 Art** | Record 6–12s voice samples or upload `.wav`/`.mp3` -> Vocal DNA Biometrics ($F_0$ Hz, Warmth, Timbre) + **F5-TTS / CosyVoice ZeroGPU + Acoustic Voice Twin DSP** -> 16-bit `.wav` export, plus watermark-free **Flux.1** HD image generation. | `SWivid F5-TTS`, `CosyVoice`, Neural OpenAI-Audio, `Black Forest Labs Flux.1` |
+1. **Unified Chat-First Premium Interface (Zero Manual Tabs Needed)**
+   - Clean, distraction-free chat experience with **Light**, **Dark**, and **System** appearance modes and **zero paywalls / upgrade banners**.
+   - Just message Open Brain in **any language** (Bangla, Banglish, English, Hindi, Chinese, etc.) — it automatically runs the right engine inline in chat:
+     - Ask for an animation/explainer video -> writes Canvas2D JS code in Sandbox & muxes hardware H.264 **`.mp4` video** inline.
+     - Ask for a cinematic/realistic video -> renders multi-scene **Flux Cinema + Neural Voiceover `.mp4`** inline.
+     - Ask *"can you clone my voice?"* or ask it to speak -> opens an inline **Zero-Shot Voice Recorder** or synthesizes cloned `.wav` speech inline.
+     - Ask for artwork or wallpapers -> renders watermark-free **Flux.1 HD** images inline.
+     - Ask to build an app or game -> compiles & previews a live interactive **HTML5 App** inline.
+     - Ask to set an alarm, timer, WhatsApp, call, Maps, or phone setting -> executes natively via **`OpenBrainNativeBridge`**.
+
+2. **Smart `Auto` Router + Parallel Mixture-of-Agents (`Council MoA`)**
+   - **`Auto` (Default)**: Automatically routes coding to **Qwen 2.5 Coder 32B**, math/logic to **DeepSeek-R1**, vision to **Omni-4o Vision**, and general synthesis to **Llama 3.3 70B**.
+   - **`OpenBrain Council (MoA)` / `Max` Effort**: Runs **DeepSeek-R1** and **Qwen 2.5 Coder 32B** in parallel, cross-verifies logic and edge cases, and synthesizes one unified response with a collapsible **Thought Process** trace.
+
+3. **`+` Add to Chat Sheet & Slide-Out Drawer**
+   - **`+` Add to Chat**: Attach **Image**, snap **Camera**, attach **File / Audio Voice Sample**, or manage **Skills (`SKILL.md`)**, **MCP Connectors**, **Voice Cloning Lab**, and **Phone OS Control**.
+   - **Slide-Out Drawer**: Access **Phone Control**, **Assets** (all generated MP4 videos, WAV voice clips, HD images, and HTML5 apps saved in one place), **Skills & More**, **Pinned / Projects / Recents** conversations, and **Profile & Appearance**.
 
 ---
 
 ## Run Locally or Rebuild APK
 
 ```bash
-# Install dependencies
 npm install
-
-# Run development server
 npm run dev
-
-# Build production web app & start server
-npm run build
-npm start
+npm run build:apk
 ```
 
 ---

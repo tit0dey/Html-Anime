@@ -28,7 +28,7 @@ app.get('/api/health', (_req, res) => {
   res.json({
     ok: true,
     app: 'Open Brain',
-    version: '2.0.0',
+    version: '3.0.0',
     apkReady: fs.existsSync(APK_FILE),
     apkSizeBytes: fs.existsSync(APK_FILE) ? fs.statSync(APK_FILE).size : 0,
   });

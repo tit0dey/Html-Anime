@@ -1,17 +1,13 @@
-export type AppTab =
-  | 'agent'
-  | 'skills'
-  | 'video'
-  | 'voice'
-  | 'image'
-  | 'code'
-  | 'apk';
+export type ReasoningEffort = 'fast' | 'default' | 'high' | 'max';
 
-export type LanguageMode = 'banglish' | 'en' | 'bn';
+export type AppearanceMode = 'light' | 'dark' | 'system';
+
+export type ResponseLanguageMode = 'auto' | 'en';
 
 export interface LLMModelInfo {
   id: string;
   name: string;
+  shortName: string;
   provider: string;
   badge: string;
   description: string;
@@ -72,6 +68,8 @@ export interface PhoneActionPayload {
 export interface AgentToolStep {
   id: string;
   tool:
+    | 'smart_router'
+    | 'moa_council'
     | 'web_search'
     | 'github_search'
     | 'weather_live'
@@ -82,6 +80,8 @@ export interface AgentToolStep {
     | 'reddit_hn_pulse'
     | 'mini_app'
     | 'code_video_mp4'
+    | 'cinema_video_mp4'
+    | 'voice_clone_tts'
     | 'phone_action'
     | 'custom_webhook';
   title: string;
@@ -95,10 +95,39 @@ export interface RenderedCodeVideoArtifact {
   title: string;
   videoUrl: string;
   mimeType: string;
-  code: string;
+  code?: string;
+  engineLabel?: string;
   durationSec: number;
   width: number;
   height: number;
+}
+
+export interface VocalBiometrics {
+  pitchHz: number;
+  warmth: number;
+  brightness: number;
+  paceFactor: number;
+  timbreLabel: string;
+  recommendedBaseVoice: 'alloy' | 'echo' | 'fable' | 'onyx' | 'nova' | 'shimmer';
+}
+
+export interface VoiceProfile {
+  id: string;
+  name: string;
+  createdAt: number;
+  audioDataUrl: string;
+  durationSec: number;
+  referenceText: string;
+  biometrics: VocalBiometrics;
+}
+
+export interface SynthesizedClip {
+  id: string;
+  text: string;
+  voiceName: string;
+  engineUsed: string;
+  audioUrl: string;
+  createdAt: number;
 }
 
 export interface ChatMessage {
@@ -107,16 +136,49 @@ export interface ChatMessage {
   content: string;
   timestamp: number;
   model?: string;
+  routedModelLabel?: string;
+  thinkingTrace?: string;
   activeSkillNames?: string[];
   attachedImage?: string;
+  attachedFileName?: string;
   generatedImages?: string[];
   codeVideoArtifact?: RenderedCodeVideoArtifact;
+  voiceClipArtifact?: SynthesizedClip;
+  showVoiceCloneRecorder?: boolean;
   phoneActions?: PhoneActionPayload[];
   codeArtifact?: {
     title: string;
     html: string;
   };
   toolSteps?: AgentToolStep[];
+}
+
+export interface ConversationProject {
+  id: string;
+  name: string;
+  instructions: string;
+  createdAt: number;
+}
+
+export interface ConversationThread {
+  id: string;
+  title: string;
+  pinned?: boolean;
+  projectId?: string;
+  updatedAt: number;
+  messages: ChatMessage[];
+}
+
+export interface GeneratedAssetItem {
+  id: string;
+  kind: 'video' | 'voice' | 'image' | 'app';
+  title: string;
+  subtitle?: string;
+  url?: string;
+  html?: string;
+  code?: string;
+  mimeType?: string;
+  createdAt: number;
 }
 
 export type VideoEngineType = 'claude-code-mp4' | 'cinema-director' | 'hf-wan-diffusion';
@@ -148,34 +210,6 @@ export interface VideoGenerationItem {
   createdAt: number;
 }
 
-export interface VocalBiometrics {
-  pitchHz: number;
-  warmth: number;
-  brightness: number;
-  paceFactor: number;
-  timbreLabel: string;
-  recommendedBaseVoice: 'alloy' | 'echo' | 'fable' | 'onyx' | 'nova' | 'shimmer';
-}
-
-export interface VoiceProfile {
-  id: string;
-  name: string;
-  createdAt: number;
-  audioDataUrl: string;
-  durationSec: number;
-  referenceText: string;
-  biometrics: VocalBiometrics;
-}
-
-export interface SynthesizedClip {
-  id: string;
-  text: string;
-  voiceName: string;
-  engineUsed: string;
-  audioUrl: string;
-  createdAt: number;
-}
-
 export interface GeneratedImageItem {
   id: string;
   prompt: string;
@@ -189,11 +223,15 @@ export interface GeneratedImageItem {
 }
 
 export interface AppSettings {
+  userName: string;
   selectedModel: string;
+  reasoningEffort: ReasoningEffort;
+  appearance: AppearanceMode;
+  responseLanguage: ResponseLanguageMode;
   autonomousAgent: boolean;
   autoSpeak: boolean;
   featherlightEcoMode: boolean;
-  language: LanguageMode;
+  activeVoiceProfileId: string;
   groqApiKey: string;
   geminiApiKey: string;
   hfToken: string;

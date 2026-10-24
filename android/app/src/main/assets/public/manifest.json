@@ -1,12 +1,12 @@
 {
-  "name": "Open Brain — AI Super-Agent",
+  "name": "Open Brain",
   "short_name": "Open Brain",
-  "description": "Free and Unlimited Autonomous AI Agent with Skills, Connectors, Code-to-MP4 Video Sandbox, Voice Cloning and Phone Control",
+  "description": "Free and Unlimited Autonomous AI Super-Agent with Auto Multi-Model Routing, Skills, Connectors, MP4 Video Sandbox, Voice Cloning & Phone Control",
   "start_url": "./index.html",
   "display": "standalone",
   "orientation": "portrait-primary",
-  "background_color": "#050A0E",
-  "theme_color": "#14B8A6",
+  "background_color": "#FFFFFF",
+  "theme_color": "#FFFFFF",
   "icons": [
     {
       "src": "./icon.svg",
