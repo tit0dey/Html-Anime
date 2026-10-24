@@ -5,12 +5,15 @@ import {
   BrainSkill,
   ChatMessage,
   CustomWebhookConnector,
+  MemoryItem,
   PhoneActionPayload,
   RenderedCodeVideoArtifact,
+  ResearchSource,
   SynthesizedClip,
   VoiceProfile,
 } from '../types';
 import { renderCodeSandboxToMp4 } from './codeSandboxVideoEngine';
+import { runDeepResearchPipeline } from './deepResearchEngine';
 import { buildFluxImageUrl, getDimensionsForRatio } from './imageEngine';
 import {
   ChatTurnInput,
@@ -18,12 +21,18 @@ import {
   generateFreeLLMResponse,
   generateSmartBrainResponse,
 } from './llmEngine';
+import {
+  extractExplicitMemoryFromPrompt,
+  formatMemoryBlockForPrompt,
+} from './memoryEngine';
 import { executePhoneAction } from './nativeBridge';
 import { generateOpenBrainVideo } from './videoEngine';
 import { synthesizeClonedVoice } from './voiceCloneEngine';
 
 interface PlannedToolCall {
   tool:
+    | 'deep_research'
+    | 'save_memory'
     | 'web_search'
     | 'github_search'
     | 'weather_live'
@@ -41,6 +50,7 @@ interface PlannedToolCall {
   query: string;
   aspectRatio?: '1:1' | '9:16' | '16:9';
   voiceMode?: 'speak' | 'setup_clone';
+  memoryCategory?: MemoryItem['category'];
   phoneParams?: {
     action: PhoneActionPayload['action'];
     label?: string;
@@ -54,7 +64,10 @@ interface AgentPlan {
   calls: PlannedToolCall[];
 }
 
-async function runWebSearchTool(query: string): Promise<string> {
+async function runWebSearchTool(
+  query: string,
+  addSource: (s: ResearchSource) => void
+): Promise<string> {
   const results: string[] = [];
 
   try {
@@ -65,8 +78,13 @@ async function runWebSearchTool(query: string): Promise<string> {
     if (r.ok) {
       const d = await r.json();
       for (const h of (d?.query?.search || []).slice(0, 3)) {
+        const title = String(h.title || '');
         const snippet = String(h.snippet || '').replace(/<[^>]+>/g, '');
-        results.push(`[Wikipedia: ${h.title}] ${snippet}`);
+        const url = `https://en.wikipedia.org/wiki/${encodeURIComponent(
+          title.replace(/\s+/g, '_')
+        )}`;
+        addSource({ title: `Wikipedia: ${title}`, url, domain: 'wikipedia.org', snippet });
+        results.push(`[Wikipedia: ${title}] ${snippet}`);
       }
     }
   } catch {
@@ -81,6 +99,14 @@ async function runWebSearchTool(query: string): Promise<string> {
     if (r.ok) {
       const d = await r.json();
       if (d.AbstractText) {
+        if (d.AbstractURL) {
+          addSource({
+            title: d.Heading || query,
+            url: d.AbstractURL,
+            domain: 'duckduckgo.com',
+            snippet: d.AbstractText,
+          });
+        }
         results.push(`[DuckDuckGo Instant: ${d.Heading || query}] ${d.AbstractText}`);
       }
       for (const item of (d?.RelatedTopics || []).slice(0, 2)) {
@@ -130,7 +156,11 @@ async function runRedditHnPulseTool(query: string): Promise<string> {
   return out.join('\n') || `No community discussions found for "${query}".`;
 }
 
-async function runGitHubSearchTool(query: string, ghToken?: string): Promise<string> {
+async function runGitHubSearchTool(
+  query: string,
+  ghToken: string | undefined,
+  addSource: (s: ResearchSource) => void
+): Promise<string> {
   try {
     const headers: Record<string, string> = {};
     if (ghToken?.trim()) headers.Authorization = `Bearer ${ghToken.trim()}`;
@@ -144,6 +174,15 @@ async function runGitHubSearchTool(query: string, ghToken?: string): Promise<str
     const data = await resp.json();
     const items = data?.items || [];
     if (!items.length) return `No open-source GitHub repositories matched "${query}".`;
+    for (const repo of items.slice(0, 3)) {
+      if (repo?.html_url) {
+        addSource({
+          title: `${repo.full_name} (${repo.stargazers_count} stars)`,
+          url: repo.html_url,
+          domain: 'github.com',
+        });
+      }
+    }
     return items
       .map(
         (repo: Record<string, unknown>) =>
@@ -281,15 +320,24 @@ function runJsSandboxTool(expressionOrCode: string): string {
   }
 }
 
-/**
- * Fallback multilingual intent detector so even if an LLM JSON plan fails or omits a media tool,
- * direct requests in English/Banglish/Bangla/Hindi ("clone my voice", "video banao", "chobi banao")
- * ALWAYS trigger Open Brain's native media/OS engines automatically!
- */
-function detectGuaranteedDirectTool(userPrompt: string): PlannedToolCall | null {
+function detectGuaranteedDirectTool(
+  userPrompt: string,
+  forceDeepResearch?: boolean
+): PlannedToolCall | null {
+  if (forceDeepResearch) {
+    return { tool: 'deep_research', query: userPrompt };
+  }
+
   const p = userPrompt.toLowerCase();
 
-  // Voice clone setup intent ("can you clone my voice?", "amar voice clone koro")
+  if (
+    /\b(deep research|comprehensive report|in-depth report|detailed research|research everything about)\b/.test(
+      p
+    )
+  ) {
+    return { tool: 'deep_research', query: userPrompt };
+  }
+
   if (
     /\b(clone my voice|voice clone|clone voice|amar voice clone|amar golar awaj|clone kor)\b/.test(
       p
@@ -303,7 +351,6 @@ function detectGuaranteedDirectTool(userPrompt: string): PlannedToolCall | null 
     };
   }
 
-  // Direct TTS / Cloned Speech generation
   if (
     /\b(generate voice|generate speech|read aloud|speak this|narrate this|voice e bolo|awaje bolo|tts)\b/.test(
       p
@@ -312,14 +359,14 @@ function detectGuaranteedDirectTool(userPrompt: string): PlannedToolCall | null 
     return {
       tool: 'voice_clone_tts',
       voiceMode: 'speak',
-      query: userPrompt.replace(
-        /^.*?\b(say|speak|read aloud|speak this|narrate this|bolo)\b\s*[:-]?\s*/i,
-        ''
-      ) || userPrompt,
+      query:
+        userPrompt.replace(
+          /^.*?\b(say|speak|read aloud|speak this|narrate this|bolo)\b\s*[:-]?\s*/i,
+          ''
+        ) || userPrompt,
     };
   }
 
-  // Video generation intent
   if (
     /\b(make a video|create a video|generate a video|render a video|mp4 video|video banao|video toiri|animation video|manim video|explainer video)\b/.test(
       p
@@ -335,7 +382,6 @@ function detectGuaranteedDirectTool(userPrompt: string): PlannedToolCall | null 
     };
   }
 
-  // Image generation intent
   if (
     /\b(generate image|generate an image|create an image|draw a|draw an|make a wallpaper|chobi banao|ekta chobi|render an image|logo design)\b/.test(
       p
@@ -363,15 +409,20 @@ export async function runOpenBrainAutonomousAgent(params: {
   connectors: BrainConnector[];
   webhooks: CustomWebhookConnector[];
   voiceProfiles: VoiceProfile[];
+  memories: MemoryItem[];
+  forceDeepResearch?: boolean;
   projectInstructions?: string;
   attachedImage?: string;
   attachedFileText?: string;
   attachedFileName?: string;
+  onSaveMemoryFact: (fact: string, category?: MemoryItem['category']) => string | undefined;
   onStepsChange: (steps: AgentToolStep[]) => void;
 }): Promise<{
   reply: string;
   routedModelLabel: string;
   thinkingTrace?: string;
+  sources: ResearchSource[];
+  savedMemoryFact?: string;
   generatedImages: string[];
   codeVideoArtifact?: RenderedCodeVideoArtifact;
   voiceClipArtifact?: SynthesizedClip;
@@ -389,20 +440,39 @@ export async function runOpenBrainAutonomousAgent(params: {
     connectors,
     webhooks,
     voiceProfiles,
+    memories,
+    forceDeepResearch,
     projectInstructions,
     attachedImage,
     attachedFileText,
     attachedFileName,
+    onSaveMemoryFact,
     onStepsChange,
   } = params;
 
   const steps: AgentToolStep[] = [];
   const generatedImages: string[] = [];
   const phoneActions: PhoneActionPayload[] = [];
+  const collectedSources: ResearchSource[] = [];
+  let savedMemoryFact: string | undefined;
   let codeArtifact: { title: string; html: string } | undefined;
   let codeVideoArtifact: RenderedCodeVideoArtifact | undefined;
   let voiceClipArtifact: SynthesizedClip | undefined;
   let showVoiceCloneRecorder = false;
+
+  const addSource = (s: ResearchSource) => {
+    if (!s.url || collectedSources.some((x) => x.url === s.url)) return;
+    collectedSources.push(s);
+  };
+
+  // Instant zero-latency personal memory check
+  if (settings.autoMemory !== false) {
+    const fastMem = extractExplicitMemoryFromPrompt(userPrompt);
+    if (fastMem) {
+      const saved = onSaveMemoryFact(fastMem.fact, fastMem.category);
+      if (saved) savedMemoryFact = saved;
+    }
+  }
 
   const activeProfile =
     voiceProfiles.find((v) => v.id === settings.activeVoiceProfileId) ||
@@ -423,84 +493,98 @@ export async function runOpenBrainAutonomousAgent(params: {
   const toolObservations: string[] = [];
 
   if (settings.autonomousAgent && !attachedImage) {
-    const availableToolLines: string[] = [];
-    if (enabledConnectorSlugs.has('web_search')) {
-      availableToolLines.push('- "web_search": live facts, news, Wikipedia & DuckDuckGo knowledge');
-    }
-    if (enabledConnectorSlugs.has('github')) {
-      availableToolLines.push('- "github_search": open-source repositories & tools on GitHub');
-    }
-    if (enabledConnectorSlugs.has('weather')) {
-      availableToolLines.push(
-        '- "weather_live": current weather & forecast for a city (query = city name only)'
-      );
-    }
-    if (enabledConnectorSlugs.has('crypto')) {
-      availableToolLines.push(
-        '- "crypto_market": live USD & INR crypto prices (query = coin names)'
-      );
-    }
-    if (enabledConnectorSlugs.has('arxiv')) {
-      availableToolLines.push('- "arxiv_research": scientific or AI research papers');
-    }
-    if (enabledConnectorSlugs.has('pulse')) {
-      availableToolLines.push('- "reddit_hn_pulse": live Reddit & HackerNews discussions');
-    }
-    if (enabledConnectorSlugs.has('android_os')) {
-      availableToolLines.push(
-        `- "phone_action": control the user's Android phone! Include "phoneParams": {"action": "set_alarm"|"set_timer"|"dial_number"|"send_whatsapp"|"send_sms"|"add_calendar"|"open_maps"|"open_youtube"|"open_settings"|"send_email"|"battery_status"|"copy_clipboard", "label": "human title", "params": {...}}. Examples: set_alarm -> {"hour": 7, "minute": 30, "message": "Wake up"}; set_timer -> {"seconds": 300, "message": "Focus"}; send_whatsapp -> {"phone": "", "message": "Hello"}; dial_number -> {"phone": "9876543210"}; open_maps -> {"query": "Howrah Bridge"}; open_youtube -> {"query": "lofi music"}; open_settings -> {"section": "wifi"|"bluetooth"|"sound"|"battery"|"display"}; battery_status -> {}`
-      );
-    }
-    availableToolLines.push(
-      '- "code_video_mp4": when user asks for an animation video, math/Manim visual, kinetic explainer, diagram video, or motion graphic (query = vivid description; optional aspectRatio: "16:9"|"9:16")',
-      '- "cinema_video_mp4": when user asks for a photorealistic cinematic video, story video, movie scene, or nature/city video with voiceover (query = vivid scene description; optional aspectRatio: "16:9"|"9:16")',
-      '- "voice_clone_tts": when user asks to clone their voice (voiceMode = "setup_clone") OR asks to speak/read/narrate/generate voice audio (voiceMode = "speak", query = exact text script to speak)',
-      '- "generate_image": when user asks to draw/create/generate a still image, photo, artwork, logo, or wallpaper (query = detailed English visual prompt; optional aspectRatio: "1:1"|"9:16"|"16:9")',
-      '- "mini_app": when user asks to build a playable game, interactive calculator, dashboard, or web app (query = app specification)',
-      '- "js_sandbox": exact math, financial EMI/SIP, statistics, or data computation (query = valid JS expression)'
-    );
-    if (enabledWebhooks.length > 0) {
-      availableToolLines.push(
-        `- "custom_webhook": invoke user webhook (${enabledWebhooks
-          .map((w) => w.name)
-          .join(', ')}) with "webhookName" and "query"`
-      );
-    }
+    let plannedCalls: PlannedToolCall[] = [];
 
-    const plannerPrompt = `You are Open Brain v3.0 Super-Agent Planner. The user may write in ANY language (English, Banglish, Bengali, Hindi, Chinese, etc.). Decide which tools (0 to 3 max) to run automatically so the user never has to click any manual mode.
+    if (forceDeepResearch) {
+      plannedCalls = [{ tool: 'deep_research', query: userPrompt }];
+    } else {
+      const availableToolLines: string[] = [
+        '- "deep_research": multi-wave parallel research across Wikipedia, Web, HackerNews, GitHub & Academic Papers when user asks for deep research, thorough analysis, market/tech comparison, or cited report',
+      ];
+      if (settings.autoMemory !== false) {
+        availableToolLines.push(
+          '- "save_memory": when user shares a durable personal fact, name, location, project stack, or standing preference to remember across chats (query = concise English summary of the fact; memoryCategory = "profile"|"preference"|"project"|"instruction")'
+        );
+      }
+      if (enabledConnectorSlugs.has('web_search')) {
+        availableToolLines.push('- "web_search": quick live facts, news, Wikipedia & DuckDuckGo lookup');
+      }
+      if (enabledConnectorSlugs.has('github')) {
+        availableToolLines.push('- "github_search": open-source repositories & tools on GitHub');
+      }
+      if (enabledConnectorSlugs.has('weather')) {
+        availableToolLines.push(
+          '- "weather_live": current weather & forecast for a city (query = city name only)'
+        );
+      }
+      if (enabledConnectorSlugs.has('crypto')) {
+        availableToolLines.push(
+          '- "crypto_market": live USD & INR crypto prices (query = coin names)'
+        );
+      }
+      if (enabledConnectorSlugs.has('arxiv')) {
+        availableToolLines.push('- "arxiv_research": scientific or AI research papers');
+      }
+      if (enabledConnectorSlugs.has('pulse')) {
+        availableToolLines.push('- "reddit_hn_pulse": live Reddit & HackerNews discussions');
+      }
+      if (enabledConnectorSlugs.has('android_os')) {
+        availableToolLines.push(
+          `- "phone_action": control the user's Android phone! Include "phoneParams": {"action": "set_alarm"|"set_timer"|"dial_number"|"send_whatsapp"|"send_sms"|"add_calendar"|"open_maps"|"open_youtube"|"open_settings"|"send_email"|"battery_status"|"copy_clipboard", "label": "human title", "params": {...}}. Examples: set_alarm -> {"hour": 7, "minute": 30, "message": "Wake up"}; set_timer -> {"seconds": 300, "message": "Focus"}; send_whatsapp -> {"phone": "", "message": "Hello"}; dial_number -> {"phone": "9876543210"}; open_maps -> {"query": "Howrah Bridge"}; open_youtube -> {"query": "lofi music"}; open_settings -> {"section": "wifi"|"bluetooth"|"sound"|"battery"|"display"}; battery_status -> {}`
+        );
+      }
+      availableToolLines.push(
+        '- "code_video_mp4": when user asks for an animation video, math/Manim visual, kinetic explainer, diagram video, or motion graphic (query = vivid description; optional aspectRatio: "16:9"|"9:16")',
+        '- "cinema_video_mp4": when user asks for a photorealistic cinematic video, story video, movie scene, or nature/city video with voiceover (query = vivid scene description; optional aspectRatio: "16:9"|"9:16")',
+        '- "voice_clone_tts": when user asks to clone their voice (voiceMode = "setup_clone") OR asks to speak/read/narrate/generate voice audio (voiceMode = "speak", query = exact text script to speak)',
+        '- "generate_image": when user asks to draw/create/generate a still image, photo, artwork, logo, or wallpaper (query = detailed English visual prompt; optional aspectRatio: "1:1"|"9:16"|"16:9")',
+        '- "mini_app": when user asks to build a playable game, interactive calculator, dashboard, or web app (query = app specification)',
+        '- "js_sandbox": exact math, financial EMI/SIP, statistics, or data computation (query = valid JS expression)'
+      );
+      if (enabledWebhooks.length > 0) {
+        availableToolLines.push(
+          `- "custom_webhook": invoke user webhook (${enabledWebhooks
+            .map((w) => w.name)
+            .join(', ')}) with "webhookName" and "query"`
+        );
+      }
+
+      const plannerPrompt = `You are Open Brain v3.5 Ultra Autonomous Planner. The user may write in ANY language (English, Banglish, Bengali, Hindi, Chinese, etc.). Decide which tools (0 to 3 max) to run automatically.
 Available Tools:
 ${availableToolLines.join('\n')}
 
 Return ONLY valid JSON:
-{"needsTools": boolean, "calls": [{"tool": "...", "query": "...", "aspectRatio": "16:9", "voiceMode": "speak", "phoneParams": ...}]}
+{"needsTools": boolean, "calls": [{"tool": "...", "query": "...", "aspectRatio": "16:9", "voiceMode": "speak", "memoryCategory": "preference", "phoneParams": ...}]}
 If it is pure conversation, coding explanation, writing, or reasoning needing no external/media tool, return {"needsTools": false, "calls": []}.`;
 
-    let plannedCalls: PlannedToolCall[] = [];
-    try {
-      const rawPlan = await generateFreeLLMResponse(
-        [
-          { role: 'system', content: plannerPrompt },
-          { role: 'user', content: userPrompt },
-        ],
-        settings,
-        'openai'
-      );
-      const parsed = extractJsonObject<AgentPlan>(rawPlan);
-      if (parsed?.needsTools && Array.isArray(parsed.calls)) {
-        plannedCalls = parsed.calls.slice(0, 3);
+      try {
+        const rawPlan = await generateFreeLLMResponse(
+          [
+            { role: 'system', content: plannerPrompt },
+            { role: 'user', content: userPrompt },
+          ],
+          settings,
+          'openai'
+        );
+        const parsed = extractJsonObject<AgentPlan>(rawPlan);
+        if (parsed?.needsTools && Array.isArray(parsed.calls)) {
+          plannedCalls = parsed.calls.slice(0, 3);
+        }
+      } catch {
+        // Fallback below
       }
-    } catch {
-      // Fallback to deterministic detector if needed
-    }
 
-    if (plannedCalls.length === 0) {
-      const fallbackCall = detectGuaranteedDirectTool(userPrompt);
-      if (fallbackCall) plannedCalls = [fallbackCall];
+      if (plannedCalls.length === 0) {
+        const fallbackCall = detectGuaranteedDirectTool(userPrompt, false);
+        if (fallbackCall) plannedCalls = [fallbackCall];
+      }
     }
 
     for (const call of plannedCalls) {
       const stepId = `step-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
       const titleMap: Record<string, string> = {
+        deep_research: 'Deep Research Multi-Wave Scanner',
+        save_memory: 'Permanent Memory Cortex',
         web_search: 'Live Web & Knowledge Search',
         github_search: 'GitHub Open-Source Search',
         weather_live: 'Open-Meteo Live Weather',
@@ -531,10 +615,28 @@ If it is pure conversation, coding explanation, writing, or reasoning needing no
       let output = '';
 
       try {
-        if (call.tool === 'web_search') {
-          output = await runWebSearchTool(call.query);
+        if (call.tool === 'deep_research') {
+          const dr = await runDeepResearchPipeline(
+            call.query || userPrompt,
+            settings,
+            (msg) => {
+              stepObj.title = `Deep Research: ${msg}`;
+              onStepsChange([...steps]);
+            }
+          );
+          for (const s of dr.sources) addSource(s);
+          output = dr.dossier;
+        } else if (call.tool === 'save_memory') {
+          const saved = onSaveMemoryFact(
+            call.query,
+            call.memoryCategory || 'preference'
+          );
+          if (saved) savedMemoryFact = saved;
+          output = `Stored in Permanent Memory Cortex: "${call.query}"`;
+        } else if (call.tool === 'web_search') {
+          output = await runWebSearchTool(call.query, addSource);
         } else if (call.tool === 'github_search') {
-          output = await runGitHubSearchTool(call.query, settings.githubToken);
+          output = await runGitHubSearchTool(call.query, settings.githubToken, addSource);
         } else if (call.tool === 'weather_live') {
           output = await runLiveWeatherTool(call.query);
         } else if (call.tool === 'crypto_market') {
@@ -718,6 +820,8 @@ If it is pure conversation, coding explanation, writing, or reasoning needing no
     }
   }
 
+  const memoryDirective = formatMemoryBlockForPrompt(memories);
+
   const skillsDirective =
     enabledSkills.length > 0
       ? `\nACTIVE MODULAR SKILLS (${enabledSkills.length}):\n` +
@@ -728,18 +832,18 @@ If it is pure conversation, coding explanation, writing, or reasoning needing no
     ? `\nACTIVE PROJECT INSTRUCTIONS:\n${projectInstructions.trim()}`
     : '';
 
-  const systemInstruction = `You are **Open Brain** — a next-generation, 100% Free & Unlimited Autonomous AI Super-Agent built with Smart Multi-Model Routing + Mixture-of-Agents Council synthesis and Zero-Phone-Pressure architecture.
-Everything executes directly inside this unified chat without the user needing to pick manual tabs:
+  const systemInstruction = `You are **Open Brain** — an unmatched, 100% Free & Unlimited Autonomous AI Super-Agent powered by Smart Multi-Model Routing, 3-Specialist Parallel Mixture-of-Agents Council synthesis, Self-Verifying Critic loops, Permanent Personal Memory, Multi-Wave Deep Research, and Zero-Phone-Pressure architecture.
+Everything executes directly inside this unified chat:
 - Programmatic Code-to-MP4 Sandbox Video & Photorealistic Cinema MP4 Video
 - Zero-Shot Voice Cloning (F5-TTS / Vocal DNA Twin) & Neural Speech
 - HD Flux.1 Image Generation & Interactive HTML5 App Compilation
+- Multi-Wave Deep Research across Web, Wikipedia, GitHub, HackerNews & Scholarly Papers
 - Native Android Phone OS Control (Alarms, Timers, WhatsApp, SMS, Calls, Maps, Calendar, YouTube, Settings, Battery)
-- Modular Skills (SKILL.md) & Live Connectors (Web/Wiki, GitHub, Weather, Crypto USD/INR, ArXiv, HN/Reddit, Webhooks)
-${langHint}${projectDirective}${skillsDirective}${
+${langHint}${memoryDirective}${projectDirective}${skillsDirective}${
     toolObservations.length > 0
-      ? `\n\nLIVE ACTIONS & CONNECTOR DATA COMPLETED JUST NOW:\n${toolObservations.join(
+      ? `\n\nLIVE EVIDENCE, ACTIONS & CONNECTOR DATA COMPLETED JUST NOW:\n${toolObservations.join(
           '\n\n'
-        )}\nConfirm or synthesize these real results concisely and accurately.`
+        )}\nSynthesize these verified findings thoroughly, clearly, and authoritatively.`
       : ''
   }`;
 
@@ -765,27 +869,32 @@ ${langHint}${projectDirective}${skillsDirective}${
     },
   ];
 
-  let councilStepObj: AgentToolStep | null = null;
-  const brainRes = await generateSmartBrainResponse(finalMessages, settings, (note) => {
-    if (!councilStepObj) {
-      councilStepObj = {
-        id: `step-council-${Date.now()}`,
-        tool: 'moa_council',
-        title: 'Mixture-of-Agents Council',
+  const trackedSteps: Record<string, AgentToolStep> = {};
+  const brainRes = await generateSmartBrainResponse(finalMessages, settings, (kind, note) => {
+    if (!trackedSteps[kind]) {
+      const s: AgentToolStep = {
+        id: `step-${kind}-${Date.now()}`,
+        tool: kind,
+        title:
+          kind === 'moa_council'
+            ? '3-Model Council (R1 + Qwen-32B + Llama-70B)'
+            : 'Self-Verifying Critic Audit',
         query: note,
         status: 'running',
       };
-      steps.push(councilStepObj);
+      trackedSteps[kind] = s;
+      steps.push(s);
     } else {
-      councilStepObj.query = note;
+      trackedSteps[kind].query = note;
     }
     onStepsChange([...steps]);
   });
 
-  if (councilStepObj) {
-    (councilStepObj as AgentToolStep).status = 'done';
-    (councilStepObj as AgentToolStep).resultSummary =
-      'Synthesized consensus from DeepSeek-R1 + Qwen-32B';
+  Object.values(trackedSteps).forEach((s) => {
+    s.status = 'done';
+    s.resultSummary = s.query;
+  });
+  if (Object.keys(trackedSteps).length > 0) {
     onStepsChange([...steps]);
   }
 
@@ -793,6 +902,8 @@ ${langHint}${projectDirective}${skillsDirective}${
     reply: brainRes.content,
     routedModelLabel: brainRes.modelUsedLabel,
     thinkingTrace: brainRes.thinkingTrace,
+    sources: collectedSources,
+    savedMemoryFact,
     generatedImages,
     codeVideoArtifact,
     voiceClipArtifact,

@@ -2,10 +2,13 @@ import React from 'react';
 import {
   AudioWaveform,
   Blocks,
+  Brain,
   Camera,
+  Check,
   ChevronRight,
   Clapperboard,
   Code2,
+  Compass,
   Image as ImageIcon,
   Paperclip,
   Smartphone,
@@ -14,14 +17,18 @@ import {
 
 interface Props {
   open: boolean;
+  deepResearchActive: boolean;
+  memoriesCount: number;
   activeSkillsCount: number;
   activeConnectorsCount: number;
   activeVoiceName?: string;
   onClose: () => void;
+  onToggleDeepResearch: () => void;
   onPickGalleryImage: () => void;
   onPickCameraPhoto: () => void;
   onPickFileOrAudio: () => void;
   onOpenSkillsModal: () => void;
+  onOpenMemoryModal: () => void;
   onOpenVoiceLabModal: () => void;
   onOpenPhoneModal: () => void;
   onQuickPrompt: (prompt: string) => void;
@@ -29,14 +36,18 @@ interface Props {
 
 export const AddToChatSheet: React.FC<Props> = ({
   open,
+  deepResearchActive,
+  memoriesCount,
   activeSkillsCount,
   activeConnectorsCount,
   activeVoiceName,
   onClose,
+  onToggleDeepResearch,
   onPickGalleryImage,
   onPickCameraPhoto,
   onPickFileOrAudio,
   onOpenSkillsModal,
+  onOpenMemoryModal,
   onOpenVoiceLabModal,
   onOpenPhoneModal,
   onQuickPrompt,
@@ -49,7 +60,7 @@ export const AddToChatSheet: React.FC<Props> = ({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-xl bg-white dark:bg-[#141821] rounded-t-[28px] pt-2.5 pb-[calc(1.35rem+env(safe-area-inset-bottom,0px))] px-5 shadow-2xl animate-sheet-up border-t border-slate-200/80 dark:border-slate-800"
+        className="w-full max-w-xl bg-white dark:bg-[#141821] rounded-t-[28px] pt-2.5 pb-[calc(1.35rem+env(safe-area-inset-bottom,0px))] px-5 shadow-2xl animate-sheet-up border-t border-slate-200/80 dark:border-slate-800 max-h-[85vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="w-10 h-1 rounded-full bg-slate-200 dark:bg-slate-700 mx-auto mb-3.5" />
@@ -103,8 +114,38 @@ export const AddToChatSheet: React.FC<Props> = ({
           </button>
         </div>
 
-        {/* Skills, Voice, Video, Art, App & Phone Capabilities (Auto-triggered in chat or configurable here) */}
+        {/* Agent Capabilities & Intelligence Modules */}
         <div className="divide-y divide-slate-100 dark:divide-slate-800/70">
+          {/* Deep Research Mode Toggle */}
+          <button
+            type="button"
+            onClick={() => {
+              onToggleDeepResearch();
+              onClose();
+            }}
+            className="w-full py-3.5 flex items-center justify-between text-left"
+          >
+            <div className="flex items-center gap-3">
+              <Compass className="w-5 h-5 text-slate-800 dark:text-slate-200 stroke-[1.75]" />
+              <div>
+                <div className="text-[15px] font-medium text-slate-900 dark:text-white">
+                  Deep Research
+                </div>
+                <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                  Multi-wave parallel scan across Web, Wiki, GitHub, HN & Papers
+                </div>
+              </div>
+            </div>
+            {deepResearchActive ? (
+              <span className="w-6 h-6 rounded-full bg-slate-900 dark:bg-teal-400 text-white dark:text-slate-950 flex items-center justify-center">
+                <Check className="w-3.5 h-3.5 stroke-[2.6]" />
+              </span>
+            ) : (
+              <ChevronRight className="w-4 h-4 text-slate-400" />
+            )}
+          </button>
+
+          {/* Skills & Connectors */}
           <button
             type="button"
             onClick={() => {
@@ -127,6 +168,30 @@ export const AddToChatSheet: React.FC<Props> = ({
             <ChevronRight className="w-4 h-4 text-slate-400" />
           </button>
 
+          {/* Permanent Personal Memory */}
+          <button
+            type="button"
+            onClick={() => {
+              onClose();
+              onOpenMemoryModal();
+            }}
+            className="w-full py-3.5 flex items-center justify-between text-left"
+          >
+            <div className="flex items-center gap-3">
+              <Brain className="w-5 h-5 text-slate-800 dark:text-slate-200 stroke-[1.75]" />
+              <div>
+                <div className="text-[15px] font-medium text-slate-900 dark:text-white">
+                  Personal Memory
+                </div>
+                <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                  {memoriesCount} permanent facts & preferences remembered
+                </div>
+              </div>
+            </div>
+            <ChevronRight className="w-4 h-4 text-slate-400" />
+          </button>
+
+          {/* Voice Cloning Lab */}
           <button
             type="button"
             onClick={() => {
@@ -151,6 +216,7 @@ export const AddToChatSheet: React.FC<Props> = ({
             <ChevronRight className="w-4 h-4 text-slate-400" />
           </button>
 
+          {/* Phone OS Control */}
           <button
             type="button"
             onClick={() => {
@@ -174,10 +240,10 @@ export const AddToChatSheet: React.FC<Props> = ({
           </button>
         </div>
 
-        {/* Subtle Auto-Capability Quick Chips (Optional 1-tap starter prompts; chat auto-detects everything!) */}
+        {/* Auto-Triggered Quick Starters */}
         <div className="pt-3 mt-1 border-t border-slate-100 dark:border-slate-800/70">
           <div className="text-[11px] font-medium text-slate-400 dark:text-slate-500 mb-2">
-            Auto-triggered in chat whenever you ask:
+            Auto-triggered directly in chat whenever you ask:
           </div>
           <div className="flex flex-wrap gap-2">
             <button

@@ -6,8 +6,10 @@ import {
   ChevronDown,
   ChevronRight,
   Code2,
+  Compass,
   Copy,
   Download,
+  ExternalLink,
   Eye,
   FileText,
   Laptop,
@@ -49,11 +51,13 @@ interface Props {
   settings: AppSettings;
   voiceProfiles: VoiceProfile[];
   activeProjectName?: string;
+  deepResearchActive?: boolean;
   composerDraft: string;
   attachedImage?: string;
   attachedFileName?: string;
   onChangeDraft: (val: string) => void;
   onClearAttachments: () => void;
+  onClearDeepResearch?: () => void;
   onSend: () => void;
   onOpenDrawer: () => void;
   onNewChat: () => void;
@@ -184,11 +188,13 @@ export const ChatWorkspace: React.FC<Props> = ({
   settings,
   voiceProfiles,
   activeProjectName,
+  deepResearchActive,
   composerDraft,
   attachedImage,
   attachedFileName,
   onChangeDraft,
   onClearAttachments,
+  onClearDeepResearch,
   onSend,
   onOpenDrawer,
   onNewChat,
@@ -407,7 +413,7 @@ export const ChatWorkspace: React.FC<Props> = ({
                 return (
                   <div key={msg.id} className="space-y-2.5">
                     {/* Assistant Identity Row */}
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <OpenBrainLogo className="w-5 h-5 text-slate-900 dark:text-white shrink-0" />
                       <span className="text-[13px] font-semibold text-slate-900 dark:text-white">
                         Open Brain
@@ -417,7 +423,30 @@ export const ChatWorkspace: React.FC<Props> = ({
                           {msg.routedModelLabel}
                         </span>
                       )}
+                      {msg.savedMemoryFact && (
+                        <span className="text-[11px] px-2 py-0.5 rounded-full bg-teal-50 dark:bg-teal-950/50 text-teal-700 dark:text-teal-300 font-medium">
+                          Memory updated
+                        </span>
+                      )}
                     </div>
+
+                    {/* Verified Research Citation Pills */}
+                    {msg.sources && msg.sources.length > 0 && (
+                      <div className="flex gap-1.5 overflow-x-auto pb-1">
+                        {msg.sources.map((src, sIdx) => (
+                          <a
+                            key={sIdx}
+                            href={src.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-[#F5F6F8] dark:bg-[#151A24] border border-slate-200/80 dark:border-slate-800 text-[11px] font-medium text-slate-700 dark:text-slate-300 hover:border-slate-400 dark:hover:border-slate-600 transition max-w-[200px]"
+                          >
+                            <span className="truncate">{src.title}</span>
+                            <ExternalLink className="w-3 h-3 text-slate-400 shrink-0" />
+                          </a>
+                        ))}
+                      </div>
+                    )}
 
                     {/* Collapsible Agent Steps & Deep Reasoning Accordion */}
                     {hasTraceOrSteps && (
@@ -817,8 +846,24 @@ export const ChatWorkspace: React.FC<Props> = ({
       {/* Bottom Floating Pills + MiniMax Rounded Composer */}
       <footer className="shrink-0 px-3.5 pb-[calc(0.65rem+env(safe-area-inset-bottom,0px))] pt-1.5 bg-white dark:bg-[#0B0E14]">
         <div className="max-w-2xl mx-auto space-y-2">
-          {/* Attachment Preview or "Connect Phone" Pill (Exact Match to Screenshot 1) */}
+          {/* Attachment Preview or Active Mode Pills */}
           <div className="flex flex-wrap items-center gap-2">
+            {deepResearchActive && (
+              <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-950 text-[12px] font-semibold">
+                <Compass className="w-3.5 h-3.5" />
+                <span>Deep Research</span>
+                {onClearDeepResearch && (
+                  <button
+                    type="button"
+                    onClick={onClearDeepResearch}
+                    className="ml-0.5 opacity-75 hover:opacity-100"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+            )}
+
             {attachedImage && (
               <div className="inline-flex items-center gap-2 pl-1.5 pr-2.5 py-1 rounded-xl bg-[#F3F4F6] dark:bg-[#1A202C] text-xs font-medium text-slate-700 dark:text-slate-200">
                 <img

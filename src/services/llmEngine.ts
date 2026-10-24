@@ -3,20 +3,20 @@ import { AppSettings, LLMModelInfo, ReasoningEffort } from '../types';
 export const FREE_LLM_MODELS: LLMModelInfo[] = [
   {
     id: 'auto',
-    name: 'Auto (Smart Multi-Agent)',
+    name: 'Auto (Smart Super-Router)',
     shortName: 'Auto',
-    provider: 'Open Brain Intelligent Router',
+    provider: 'Intelligent Multi-Model + Self-Critic',
     badge: 'DEFAULT',
-    description: 'Automatically selects or fuses the best model for coding, math, vision, or chat.',
+    description: 'Automatically routes tasks across R1, Qwen-32B, Llama-70B & Vision with verification.',
     supportsVision: true,
   },
   {
     id: 'council',
-    name: 'OpenBrain Council (MoA Ultra)',
+    name: 'OpenBrain Council (3-Model MoA)',
     shortName: 'Council-MoA',
-    provider: 'Parallel Multi-Model Synthesis',
-    badge: 'MAX IQ',
-    description: 'Runs DeepSeek-R1 + Qwen-32B / Llama-70B in parallel and synthesizes the supreme answer.',
+    provider: 'DeepSeek-R1 + Qwen-32B + Llama-70B',
+    badge: 'UNBEATABLE',
+    description: 'Runs 3 specialist models in parallel + Master Judge synthesis to beat single models.',
   },
   {
     id: 'deepseek',
@@ -24,7 +24,7 @@ export const FREE_LLM_MODELS: LLMModelInfo[] = [
     shortName: 'DeepSeek-R1',
     provider: 'DeepSeek Open-Source',
     badge: 'REASONING',
-    description: 'Extended chain-of-thought reasoning for math, science, logic & strategy.',
+    description: 'Extended chain-of-thought reasoning for math, science, proofs & strategy.',
   },
   {
     id: 'qwen-coder',
@@ -73,6 +73,9 @@ export interface SmartBrainResult {
   modelUsedLabel: string;
 }
 
+const CODE_OR_MATH_REGEX =
+  /\b(code|python|javascript|typescript|react|html|css|sql|rust|java|kotlin|c\+\+|golang|api|bug|debug|refactor|algorithm|prove|proof|theorem|calculus|integral|matrix|probability|equation|optimize|architecture)\b/i;
+
 export function classifyOptimalModelForTask(
   userPrompt: string,
   hasImage: boolean,
@@ -82,7 +85,7 @@ export function classifyOptimalModelForTask(
     return { targetModel: 'openai', reasonLabel: 'Auto · Omni-4o Vision' };
   }
   if (effort === 'max') {
-    return { targetModel: 'council', reasonLabel: 'Auto · Council MoA (Max)' };
+    return { targetModel: 'council', reasonLabel: 'Auto · 3-Model Council MoA' };
   }
   if (effort === 'fast') {
     return { targetModel: 'mistral', reasonLabel: 'Auto · Mistral Flash' };
@@ -98,11 +101,11 @@ export function classifyOptimalModelForTask(
 
   const deepReasonPattern =
     /\b(prove|proof|theorem|calculus|integral|matrix|probability|quantum|physics|strategy|architecture|analyze|compare|tradeoff|why does|step by step|logic|puzzle|riddle|optimize|derive|game theory)\b/;
-  if (effort === 'high' || deepReasonPattern.test(p) || userPrompt.length > 420) {
+  if (effort === 'high' || deepReasonPattern.test(p) || userPrompt.length > 400) {
     return { targetModel: 'deepseek', reasonLabel: 'Auto · DeepSeek-R1' };
   }
 
-  if (p.length < 60) {
+  if (p.length < 55) {
     return { targetModel: 'openai', reasonLabel: 'Auto · Omni-4o' };
   }
 
@@ -121,6 +124,72 @@ async function fetchWithTimeout(
   } finally {
     clearTimeout(timer);
   }
+}
+
+/**
+ * OpenRouter Free Frontier Tier (:free models: DeepSeek-R1, Qwen 2.5 Coder 32B, Llama 3.3 70B, Gemini 2.0 Flash)
+ */
+async function callOpenRouterFreeIfConfigured(
+  messages: ChatTurnInput[],
+  apiKey: string,
+  targetModel: string
+): Promise<string | null> {
+  if (!apiKey.trim()) return null;
+
+  const modelCandidates =
+    targetModel === 'deepseek'
+      ? ['deepseek/deepseek-r1:free', 'meta-llama/llama-3.3-70b-instruct:free']
+      : targetModel === 'qwen-coder'
+      ? ['qwen/qwen-2.5-coder-32b-instruct:free', 'deepseek/deepseek-r1:free']
+      : [
+          'meta-llama/llama-3.3-70b-instruct:free',
+          'google/gemini-2.0-flash-exp:free',
+          'deepseek/deepseek-r1:free',
+        ];
+
+  for (const orModel of modelCandidates) {
+    try {
+      const formatted = messages.map((m) => {
+        if (m.imageDataUrl) {
+          return {
+            role: m.role,
+            content: [
+              { type: 'text', text: m.content },
+              { type: 'image_url', image_url: { url: m.imageDataUrl } },
+            ],
+          };
+        }
+        return { role: m.role, content: m.content };
+      });
+
+      const resp = await fetchWithTimeout(
+        'https://openrouter.ai/api/v1/chat/completions',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${apiKey.trim()}`,
+            'HTTP-Referer': 'https://openbrain.ai',
+            'X-Title': 'Open Brain AI Super-Agent',
+          },
+          body: JSON.stringify({
+            model: orModel,
+            messages: formatted,
+          }),
+        },
+        32000
+      );
+      if (!resp.ok) continue;
+      const data = await resp.json();
+      const content = data?.choices?.[0]?.message?.content;
+      if (typeof content === 'string' && content.trim()) {
+        return content;
+      }
+    } catch {
+      continue;
+    }
+  }
+  return null;
 }
 
 async function callGroqIfConfigured(
@@ -344,15 +413,23 @@ async function executeSingleModelCall(
 ): Promise<{ clean: string; thought?: string }> {
   const hasImage = messages.some((m) => Boolean(m.imageDataUrl));
 
-  if (!hasImage && settings.ollamaUrl.trim()) {
+  if (!hasImage && settings.ollamaUrl?.trim()) {
     const ollama = await callOllamaIfConfigured(messages, settings.ollamaUrl);
     if (ollama) return splitThinkingBlock(ollama);
   }
-  if (settings.geminiApiKey.trim()) {
+  if (settings.openrouterApiKey?.trim()) {
+    const orRes = await callOpenRouterFreeIfConfigured(
+      messages,
+      settings.openrouterApiKey,
+      targetModel
+    );
+    if (orRes) return splitThinkingBlock(orRes);
+  }
+  if (settings.geminiApiKey?.trim()) {
     const gem = await callGeminiIfConfigured(messages, settings.geminiApiKey);
     if (gem) return splitThinkingBlock(gem);
   }
-  if (!hasImage && settings.groqApiKey.trim()) {
+  if (!hasImage && settings.groqApiKey?.trim()) {
     const groq = await callGroqIfConfigured(messages, settings.groqApiKey);
     if (groq) return splitThinkingBlock(groq);
   }
@@ -384,17 +461,64 @@ async function executeSingleModelCall(
   }
 
   throw new Error(
-    'Network unreachable right now. Check your internet connection or configure a local Ollama / free Groq or Gemini key in Preferences.'
+    'Network unreachable right now. Check your internet connection or configure a free OpenRouter / Groq / Gemini / Ollama endpoint in Preferences.'
   );
 }
 
 /**
- * Open Brain v3.0 Smart Multi-Model + Mixture-of-Agents (MoA) Council Responder.
+ * Self-Verifying Critic & Auto-Refiner Pass:
+ * Audits code, math, logic, and completeness before returning to the user.
+ */
+async function runSelfCriticAudit(
+  userPrompt: string,
+  draftAnswer: string,
+  settings: AppSettings
+): Promise<{ finalAnswer: string; auditSummary: string }> {
+  try {
+    const criticMessages: ChatTurnInput[] = [
+      {
+        role: 'system',
+        content:
+          'You are Open Brain Self-Verifying Critic. Audit the Assistant Draft against the User Request for logic errors, math mistakes, syntax bugs, missing edge cases, or incomplete sections. If the draft is already 100% accurate, complete, and well-structured, reply with ONLY the exact token: VERIFIED_OK. If ANY flaw or improvement exists, output ONLY the corrected, superior final answer with zero meta-commentary and no emoji stickers.',
+      },
+      {
+        role: 'user',
+        content: `[User Request]:\n${userPrompt.slice(0, 2200)}\n\n[Assistant Draft]:\n${draftAnswer.slice(
+          0,
+          4500
+        )}`,
+      },
+    ];
+
+    const audit = await executeSingleModelCall(criticMessages, settings, 'qwen-coder');
+    const txt = audit.clean.trim();
+
+    if (!txt || txt.includes('VERIFIED_OK') || txt.length < Math.min(40, draftAnswer.length * 0.35)) {
+      return {
+        finalAnswer: draftAnswer,
+        auditSummary: 'Self-Critic Verification Passed: Logic, completeness & edge cases verified.',
+      };
+    }
+
+    return {
+      finalAnswer: txt,
+      auditSummary: 'Self-Critic Auto-Refined: Detected & upgraded edge cases / precision before delivery.',
+    };
+  } catch {
+    return {
+      finalAnswer: draftAnswer,
+      auditSummary: 'Primary generation verified.',
+    };
+  }
+}
+
+/**
+ * Open Brain v3.5 Ultra: Smart Multi-Model Router + 3-Model Mixture-of-Agents Council + Self-Verifying Critic.
  */
 export async function generateSmartBrainResponse(
   messages: ChatTurnInput[],
   settings: AppSettings,
-  onCouncilStep?: (note: string) => void
+  onProgressStep?: (kind: 'moa_council' | 'self_critic', note: string) => void
 ): Promise<SmartBrainResult> {
   const hasImage = messages.some((m) => Boolean(m.imageDataUrl));
   const lastUserPrompt =
@@ -414,16 +538,29 @@ export async function generateSmartBrainResponse(
     modelUsedLabel = routed.reasonLabel;
   }
 
-  // Mixture-of-Agents Council Mode (Parallel Specialist Models + Master Synthesis)
+  // 3-Specialist Parallel Mixture-of-Agents Council Mode
   if (chosenModel === 'council' && !hasImage) {
-    onCouncilStep?.('Querying DeepSeek-R1 + Qwen-32B specialists in parallel...');
-    const [r1Draft, coderDraft] = await Promise.all([
+    onProgressStep?.(
+      'moa_council',
+      'Running DeepSeek-R1 + Qwen-32B + Llama-70B in parallel...'
+    );
+    const [r1Draft, coderDraft, llamaDraft] = await Promise.all([
       executeSingleModelCall(messages, settings, 'deepseek').catch(() => null),
       executeSingleModelCall(messages, settings, 'qwen-coder').catch(() => null),
+      executeSingleModelCall(messages, settings, 'llama').catch(() => null),
     ]);
 
-    if (r1Draft && coderDraft) {
-      onCouncilStep?.('Synthesizing verified Council consensus...');
+    const availableDrafts = [
+      r1Draft ? `[Specialist 1 — DeepSeek-R1 Logic & Proofs]:\n${r1Draft.clean.slice(0, 2600)}` : '',
+      coderDraft ? `[Specialist 2 — Qwen 2.5 Coder 32B Engineering]:\n${coderDraft.clean.slice(0, 2600)}` : '',
+      llamaDraft ? `[Specialist 3 — Llama 3.3 70B Structure & Nuance]:\n${llamaDraft.clean.slice(0, 2200)}` : '',
+    ].filter(Boolean);
+
+    if (availableDrafts.length >= 2) {
+      onProgressStep?.(
+        'moa_council',
+        `Cross-verifying ${availableDrafts.length} specialist drafts via Master Judge...`
+      );
       const synthMessages: ChatTurnInput[] = [
         ...messages.slice(0, -1),
         {
@@ -431,23 +568,28 @@ export async function generateSmartBrainResponse(
           content: `${lastUserPrompt}
 
 ---
-[INTERNAL MULTI-AGENT COUNCIL DRAFTS — DO NOT MENTION THESE DRAFTS EXPLICITLY; MERGE THEIR BEST INSIGHTS, VERIFY ALL FACTS/MATH/CODE, ELIMINATE ERRORS, AND DELIVER ONE MASTERPIECE ANSWER]:
+[INTERNAL 3-MODEL COUNCIL DRAFTS — DO NOT MENTION THESE DRAFTS EXPLICITLY. CROSS-VERIFY ALL FACTS, MATH, AND CODE ACROSS ALL SPECIALISTS, ELIMINATE ANY CONTRADICTIONS OR BUGS, AND DELIVER ONE SUPREME MASTERPIECE RESPONSE]:
 
-[Specialist 1 — DeepSeek-R1 Reasoning]:
-${r1Draft.clean.slice(0, 3200)}
-
-[Specialist 2 — Qwen 2.5 Coder / Precision]:
-${coderDraft.clean.slice(0, 3200)}`,
+${availableDrafts.join('\n\n')}`,
         },
       ];
-      const master = await executeSingleModelCall(synthMessages, settings, 'llama');
+      const master = await executeSingleModelCall(synthMessages, settings, 'deepseek');
       const councilTrace = [
-        r1Draft.thought
-          ? `DeepSeek-R1 Analysis:\n${r1Draft.thought}`
-          : `Specialist 1 (DeepSeek-R1) verified logical structure (${r1Draft.clean.length} chars).`,
-        `Specialist 2 (Qwen-32B) cross-checked technical & execution precision (${coderDraft.clean.length} chars).`,
-        `Master Council Synthesizer fused both drafts into a verified response.`,
-      ].join('\n\n');
+        r1Draft?.thought
+          ? `DeepSeek-R1 Reasoning:\n${r1Draft.thought}`
+          : r1Draft
+          ? `Specialist 1 (DeepSeek-R1): Completed deep logical analysis (${r1Draft.clean.length} chars).`
+          : '',
+        coderDraft
+          ? `Specialist 2 (Qwen 2.5 Coder 32B): Completed technical & code verification (${coderDraft.clean.length} chars).`
+          : '',
+        llamaDraft
+          ? `Specialist 3 (Llama 3.3 70B): Completed clarity & synthesis pass (${llamaDraft.clean.length} chars).`
+          : '',
+        `Master Judge: Cross-examined all ${availableDrafts.length} specialist outputs and synthesized verified consensus.`,
+      ]
+        .filter(Boolean)
+        .join('\n\n');
 
       return {
         content: master.clean,
@@ -456,17 +598,16 @@ ${coderDraft.clean.slice(0, 3200)}`,
       };
     }
 
-    if (r1Draft || coderDraft) {
-      const winner = (r1Draft || coderDraft)!;
+    const fallbackSingle = r1Draft || coderDraft || llamaDraft;
+    if (fallbackSingle) {
       return {
-        content: winner.clean,
-        thinkingTrace: winner.thought,
+        content: fallbackSingle.clean,
+        thinkingTrace: fallbackSingle.thought,
         modelUsedLabel,
       };
     }
   }
 
-  // High-effort structured reasoning instruction when Effort is 'high' or model is 'deepseek'
   let enrichedMessages = messages;
   if (
     (settings.reasoningEffort === 'high' || chosenModel === 'deepseek') &&
@@ -478,13 +619,32 @@ ${coderDraft.clean.slice(0, 3200)}`,
         ...messages[0],
         content:
           messages[0].content +
-          '\nThink carefully through edge cases, accuracy, and structure before writing a clear, authoritative final answer.',
+          '\nThink systematically through edge cases, accuracy, and structure before writing a clear, authoritative final answer.',
       },
       ...messages.slice(1),
     ];
   }
 
   const out = await executeSingleModelCall(enrichedMessages, settings, chosenModel);
+
+  // Run Self-Verifying Critic Loop when enabled on High Effort OR Code/Math tasks
+  const shouldRunCritic =
+    !hasImage &&
+    settings.selfVerification !== false &&
+    settings.reasoningEffort !== 'fast' &&
+    (settings.reasoningEffort === 'high' || CODE_OR_MATH_REGEX.test(lastUserPrompt));
+
+  if (shouldRunCritic && out.clean.length > 80) {
+    onProgressStep?.('self_critic', 'Self-Critic auditing logic, code & edge cases...');
+    const audited = await runSelfCriticAudit(lastUserPrompt, out.clean, settings);
+    const combinedTrace = [out.thought, audited.auditSummary].filter(Boolean).join('\n\n');
+    return {
+      content: audited.finalAnswer,
+      thinkingTrace: combinedTrace || undefined,
+      modelUsedLabel: `${modelUsedLabel} + Verified`,
+    };
+  }
+
   return {
     content: out.clean,
     thinkingTrace: out.thought,

@@ -9,11 +9,17 @@ import {
   ConversationThread,
   CustomWebhookConnector,
   GeneratedAssetItem,
+  MemoryItem,
   RenderedCodeVideoArtifact,
   SynthesizedClip,
   VoiceProfile,
 } from './types';
 import { runOpenBrainAutonomousAgent } from './services/agentEngine';
+import {
+  addOrUpdateMemory,
+  loadMemories,
+  saveMemories,
+} from './services/memoryEngine';
 import { analyzeVocalBiometrics } from './services/voiceCloneEngine';
 import {
   loadCustomWebhooks,
@@ -37,6 +43,7 @@ import { AssetsVaultModal } from './components/AssetsVaultModal';
 import { PhoneControlModal } from './components/PhoneControlModal';
 import { SkillsConnectorsModal } from './components/SkillsConnectorsModal';
 import { VoiceLabModal } from './components/VoiceLabModal';
+import { MemoryModal } from './components/MemoryModal';
 
 const DEFAULT_SETTINGS: AppSettings = {
   userName: 'Open Brain',
@@ -45,9 +52,12 @@ const DEFAULT_SETTINGS: AppSettings = {
   appearance: 'light',
   responseLanguage: 'en',
   autonomousAgent: true,
+  selfVerification: true,
+  autoMemory: true,
   autoSpeak: false,
   featherlightEcoMode: true,
   activeVoiceProfileId: '',
+  openrouterApiKey: '',
   groqApiKey: '',
   geminiApiKey: '',
   hfToken: '',
@@ -102,6 +112,8 @@ export function App() {
   });
   const [activeProjectId, setActiveProjectId] = useState<string | undefined>(undefined);
 
+  const [memories, setMemories] = useState<MemoryItem[]>(() => loadMemories());
+
   const [assets, setAssets] = useState<GeneratedAssetItem[]>(() => {
     try {
       const raw = localStorage.getItem('openbrain_assets_v4');
@@ -130,6 +142,7 @@ export function App() {
 
   // Composer & Live Execution State
   const [composerDraft, setComposerDraft] = useState('');
+  const [deepResearchActive, setDeepResearchActive] = useState(false);
   const [attachedImage, setAttachedImage] = useState<string | undefined>(undefined);
   const [attachedFileName, setAttachedFileName] = useState<string | undefined>(undefined);
   const [attachedFileText, setAttachedFileText] = useState<string | undefined>(undefined);
@@ -145,6 +158,7 @@ export function App() {
   const [phoneModalOpen, setPhoneModalOpen] = useState(false);
   const [skillsModalOpen, setSkillsModalOpen] = useState(false);
   const [voiceModalOpen, setVoiceModalOpen] = useState(false);
+  const [memoryModalOpen, setMemoryModalOpen] = useState(false);
 
   const galleryInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
@@ -176,7 +190,7 @@ export function App() {
     }
   }, [settings]);
 
-  // Persist Threads (compactly, stripping ephemeral blob: URLs)
+  // Persist Threads (stripping ephemeral blob: URLs)
   useEffect(() => {
     try {
       const serializable = threads.slice(0, 25).map((t) => ({
@@ -263,6 +277,10 @@ export function App() {
         setVoiceModalOpen(false);
         return true;
       }
+      if (memoryModalOpen) {
+        setMemoryModalOpen(false);
+        return true;
+      }
       return false;
     };
   }, [
@@ -274,6 +292,7 @@ export function App() {
     phoneModalOpen,
     skillsModalOpen,
     voiceModalOpen,
+    memoryModalOpen,
   ]);
 
   const activeThread =
@@ -289,6 +308,19 @@ export function App() {
 
   const updateSettings = (patch: Partial<AppSettings>) => {
     setSettings((prev) => ({ ...prev, ...patch }));
+  };
+
+  const handleSaveMemoryFact = (
+    fact: string,
+    category: MemoryItem['category'] = 'preference'
+  ): string | undefined => {
+    let savedFact: string | undefined;
+    setMemories((prev) => {
+      const res = addOrUpdateMemory(prev, fact, category);
+      if (res.addedItem) savedFact = res.addedItem.fact;
+      return res.updated;
+    });
+    return savedFact || fact;
   };
 
   const handleNewChat = (projectId?: string) => {
@@ -326,7 +358,6 @@ export function App() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // If audio file uploaded -> instant Zero-Shot Voice Profile ingestion!
     if (file.type.startsWith('audio/') || /\.(wav|mp3|m4a|ogg|webm)$/i.test(file.name)) {
       try {
         const dataUrl = await new Promise<string>((resolve, reject) => {
@@ -358,7 +389,6 @@ export function App() {
       return;
     }
 
-    // Text / Markdown / Code / CSV / JSON file
     try {
       const text = await file.text();
       setAttachedFileName(file.name);
@@ -384,6 +414,7 @@ export function App() {
     const snapImage = attachedImage;
     const snapFileName = attachedFileName;
     const snapFileText = attachedFileText;
+    const snapDeepResearch = deepResearchActive;
 
     const userMsg: ChatMessage = {
       id: `u-${Date.now()}`,
@@ -429,10 +460,13 @@ export function App() {
         connectors,
         webhooks,
         voiceProfiles,
+        memories,
+        forceDeepResearch: snapDeepResearch,
         projectInstructions: activeProject?.instructions,
         attachedImage: snapImage,
         attachedFileText: snapFileText,
         attachedFileName: snapFileName,
+        onSaveMemoryFact: handleSaveMemoryFact,
         onStepsChange: (st) => setLiveSteps(st),
       });
 
@@ -444,6 +478,8 @@ export function App() {
         model: settings.selectedModel,
         routedModelLabel: res.routedModelLabel,
         thinkingTrace: res.thinkingTrace,
+        sources: res.sources,
+        savedMemoryFact: res.savedMemoryFact,
         activeSkillNames: res.activeSkillNames,
         generatedImages: res.generatedImages,
         codeVideoArtifact: res.codeVideoArtifact,
@@ -466,7 +502,7 @@ export function App() {
         )
       );
 
-      // Auto-register any generated creations into Assets Vault!
+      // Auto-register any generated creations into Assets Vault
       const newAssets: GeneratedAssetItem[] = [];
       if (res.codeVideoArtifact) {
         newAssets.push({
@@ -590,7 +626,6 @@ export function App() {
 
   return (
     <>
-      {/* Hidden Media Inputs for "+" Add to Chat Sheet */}
       <input
         ref={galleryInputRef}
         type="file"
@@ -614,7 +649,6 @@ export function App() {
         className="hidden"
       />
 
-      {/* Unified Chat-First Super-Agent Screen */}
       <ChatWorkspace
         threadTitle={activeThread?.title || 'New Chat'}
         messages={activeThread?.messages || []}
@@ -623,6 +657,7 @@ export function App() {
         settings={settings}
         voiceProfiles={voiceProfiles}
         activeProjectName={activeProject?.name}
+        deepResearchActive={deepResearchActive}
         composerDraft={composerDraft}
         attachedImage={attachedImage}
         attachedFileName={attachedFileName}
@@ -632,6 +667,7 @@ export function App() {
           setAttachedFileName(undefined);
           setAttachedFileText(undefined);
         }}
+        onClearDeepResearch={() => setDeepResearchActive(false)}
         onSend={handleSend}
         onOpenDrawer={() => setDrawerOpen(true)}
         onNewChat={() => handleNewChat()}
@@ -643,7 +679,6 @@ export function App() {
         onUpdateVideoArtifact={handleUpdateVideoArtifact}
       />
 
-      {/* Slide-Out Left Navigation Drawer */}
       <NavigationDrawer
         open={drawerOpen}
         userName={settings.userName}
@@ -688,23 +723,25 @@ export function App() {
         onOpenProfileSettings={() => setProfileOpen(true)}
       />
 
-      {/* "+" Add to Chat Bottom Sheet */}
       <AddToChatSheet
         open={addSheetOpen}
+        deepResearchActive={deepResearchActive}
+        memoriesCount={memories.length}
         activeSkillsCount={skills.filter((s) => s.enabled).length}
         activeConnectorsCount={connectors.filter((c) => c.enabled).length}
         activeVoiceName={activeVoiceProfile?.name}
         onClose={() => setAddSheetOpen(false)}
+        onToggleDeepResearch={() => setDeepResearchActive((v) => !v)}
         onPickGalleryImage={() => galleryInputRef.current?.click()}
         onPickCameraPhoto={() => cameraInputRef.current?.click()}
         onPickFileOrAudio={() => fileInputRef.current?.click()}
         onOpenSkillsModal={() => setSkillsModalOpen(true)}
+        onOpenMemoryModal={() => setMemoryModalOpen(true)}
         onOpenVoiceLabModal={() => setVoiceModalOpen(true)}
         onOpenPhoneModal={() => setPhoneModalOpen(true)}
         onQuickPrompt={(p) => setComposerDraft(p)}
       />
 
-      {/* Select Model + Effort Bottom Sheet */}
       <SelectModelSheet
         open={modelSheetOpen}
         selectedModel={settings.selectedModel}
@@ -714,12 +751,13 @@ export function App() {
         onClose={() => setModelSheetOpen(false)}
       />
 
-      {/* User Profile & Preferences Sheet */}
       <ProfileSettingsSheet
         open={profileOpen}
         settings={settings}
+        memoriesCount={memories.length}
         onUpdateSettings={updateSettings}
         onOpenSkillsModal={() => setSkillsModalOpen(true)}
+        onOpenMemoryModal={() => setMemoryModalOpen(true)}
         onOpenVoiceModal={() => setVoiceModalOpen(true)}
         onClearHistory={() => {
           const fresh = createEmptyThread();
@@ -729,7 +767,6 @@ export function App() {
         onClose={() => setProfileOpen(false)}
       />
 
-      {/* Assets Vault Modal */}
       <AssetsVaultModal
         open={assetsOpen}
         assets={assets}
@@ -737,14 +774,12 @@ export function App() {
         onClose={() => setAssetsOpen(false)}
       />
 
-      {/* Phone Control & APK Modal */}
       <PhoneControlModal
         open={phoneModalOpen}
         onClose={() => setPhoneModalOpen(false)}
         onSendChatPrompt={(p) => setComposerDraft(p)}
       />
 
-      {/* Skills & MCP Connectors Modal */}
       <SkillsConnectorsModal
         open={skillsModalOpen}
         settings={settings}
@@ -766,7 +801,6 @@ export function App() {
         onClose={() => setSkillsModalOpen(false)}
       />
 
-      {/* Voice Cloning Lab Modal */}
       <VoiceLabModal
         open={voiceModalOpen}
         settings={settings}
@@ -776,6 +810,22 @@ export function App() {
         onSelectProfile={(id) => updateSettings({ activeVoiceProfileId: id })}
         onGeneratedClip={handleGeneratedVoiceClipFromLab}
         onClose={() => setVoiceModalOpen(false)}
+      />
+
+      <MemoryModal
+        open={memoryModalOpen}
+        memories={memories}
+        autoMemory={settings.autoMemory !== false}
+        onToggleAutoMemory={(enabled) => updateSettings({ autoMemory: enabled })}
+        onAddMemory={(fact, cat) => {
+          handleSaveMemoryFact(fact, cat);
+        }}
+        onDeleteMemory={(id) => {
+          const next = memories.filter((m) => m.id !== id);
+          setMemories(next);
+          saveMemories(next);
+        }}
+        onClose={() => setMemoryModalOpen(false)}
       />
     </>
   );

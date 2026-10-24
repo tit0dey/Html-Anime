@@ -14,6 +14,20 @@ export interface LLMModelInfo {
   supportsVision?: boolean;
 }
 
+export interface MemoryItem {
+  id: string;
+  fact: string;
+  category: 'profile' | 'preference' | 'project' | 'instruction';
+  createdAt: number;
+}
+
+export interface ResearchSource {
+  title: string;
+  url: string;
+  domain: string;
+  snippet?: string;
+}
+
 export interface BrainSkill {
   id: string;
   name: string;
@@ -70,6 +84,9 @@ export interface AgentToolStep {
   tool:
     | 'smart_router'
     | 'moa_council'
+    | 'self_critic'
+    | 'deep_research'
+    | 'save_memory'
     | 'web_search'
     | 'github_search'
     | 'weather_live'
@@ -138,6 +155,8 @@ export interface ChatMessage {
   model?: string;
   routedModelLabel?: string;
   thinkingTrace?: string;
+  sources?: ResearchSource[];
+  savedMemoryFact?: string;
   activeSkillNames?: string[];
   attachedImage?: string;
   attachedFileName?: string;
@@ -229,9 +248,12 @@ export interface AppSettings {
   appearance: AppearanceMode;
   responseLanguage: ResponseLanguageMode;
   autonomousAgent: boolean;
+  selfVerification: boolean;
+  autoMemory: boolean;
   autoSpeak: boolean;
   featherlightEcoMode: boolean;
   activeVoiceProfileId: string;
+  openrouterApiKey: string;
   groqApiKey: string;
   geminiApiKey: string;
   hfToken: string;

@@ -1,6 +1,6 @@
 {
   "name": "open-brain",
-  "version": "3.0.0",
+  "version": "3.5.0",
   "private": true,
   "type": "module",
   "description": "Open Brain — Free & Unlimited Super-Agent with Claude-Style Skills, MCP Connectors, Code-to-MP4 Sandbox Video Renderer, Zero-Shot Voice Cloning, Android Phone Control & Featherlight APK",

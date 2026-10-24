@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import {
   AudioWaveform,
   Blocks,
+  Brain,
   Check,
   ChevronRight,
   Download,
@@ -9,6 +10,7 @@ import {
   Globe,
   Info,
   KeyRound,
+  ShieldCheck,
   Smartphone,
   SunMoon,
   Trash2,
@@ -23,8 +25,10 @@ import { OpenBrainLogo } from './OpenBrainLogo';
 interface Props {
   open: boolean;
   settings: AppSettings;
+  memoriesCount: number;
   onUpdateSettings: (patch: Partial<AppSettings>) => void;
   onOpenSkillsModal: () => void;
+  onOpenMemoryModal: () => void;
   onOpenVoiceModal: () => void;
   onClearHistory: () => void;
   onClose: () => void;
@@ -33,8 +37,10 @@ interface Props {
 export const ProfileSettingsSheet: React.FC<Props> = ({
   open,
   settings,
+  memoriesCount,
   onUpdateSettings,
   onOpenSkillsModal,
+  onOpenMemoryModal,
   onOpenVoiceModal,
   onClearHistory,
   onClose,
@@ -80,16 +86,34 @@ export const ProfileSettingsSheet: React.FC<Props> = ({
             {settings.userName}
           </h2>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-            Open Brain v3.0 · Smart Multi-Agent · Zero Phone Load
+            Open Brain v3.5 Ultra · 3-Model Council · Self-Critic · Memory
           </p>
         </div>
 
         {/* Intelligence & Capabilities */}
         <div className="space-y-1.5">
           <div className="px-2 text-xs font-medium text-slate-500 dark:text-slate-400">
-            Capabilities
+            Super-Agent Cortex
           </div>
           <div className="rounded-2xl bg-white dark:bg-[#141821] divide-y divide-slate-100 dark:divide-slate-800/80 shadow-xs">
+            <button
+              type="button"
+              onClick={() => {
+                onClose();
+                onOpenMemoryModal();
+              }}
+              className="w-full px-4 py-3.5 flex items-center justify-between text-left"
+            >
+              <span className="flex items-center gap-3 text-[15px] font-medium text-slate-900 dark:text-white">
+                <Brain className="w-5 h-5 text-slate-700 dark:text-slate-300 stroke-[1.75]" />
+                Permanent Personal Memory
+              </span>
+              <span className="flex items-center gap-1 text-xs text-slate-500">
+                {memoriesCount} saved
+                <ChevronRight className="w-4 h-4 text-slate-400" />
+              </span>
+            </button>
+
             <button
               type="button"
               onClick={() => {
@@ -119,6 +143,26 @@ export const ProfileSettingsSheet: React.FC<Props> = ({
               </span>
               <ChevronRight className="w-4 h-4 text-slate-400" />
             </button>
+
+            <label className="px-4 py-3.5 flex items-center justify-between cursor-pointer">
+              <div>
+                <div className="flex items-center gap-3 text-[15px] font-medium text-slate-900 dark:text-white">
+                  <ShieldCheck className="w-5 h-5 text-slate-700 dark:text-slate-300 stroke-[1.75]" />
+                  Self-Verifying Critic Loop
+                </div>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 pl-8">
+                  Audits & auto-fixes code, math, and complex logic before replying
+                </p>
+              </div>
+              <input
+                type="checkbox"
+                checked={settings.selfVerification !== false}
+                onChange={(e) =>
+                  onUpdateSettings({ selfVerification: e.target.checked })
+                }
+                className="w-4 h-4 accent-slate-900 dark:accent-teal-400 shrink-0"
+              />
+            </label>
           </div>
         </div>
 
@@ -263,7 +307,7 @@ export const ProfileSettingsSheet: React.FC<Props> = ({
           </div>
         </div>
 
-        {/* Device, APK & Optional Boosters */}
+        {/* Device, APK & Optional Frontier Boosters */}
         <div className="space-y-1.5">
           <div className="px-2 text-xs font-medium text-slate-500 dark:text-slate-400">
             About Open Brain
@@ -276,7 +320,7 @@ export const ProfileSettingsSheet: React.FC<Props> = ({
                   Android OS Bridge
                 </span>
                 <span className="text-xs font-semibold text-teal-600 dark:text-teal-400">
-                  Active (v3.0)
+                  Active (v3.5 Ultra)
                 </span>
               </div>
             ) : (
@@ -289,7 +333,7 @@ export const ProfileSettingsSheet: React.FC<Props> = ({
                   <Download className="w-5 h-5 text-slate-700 dark:text-slate-300 stroke-[1.75]" />
                   Download Android APK
                 </span>
-                <span className="text-xs font-semibold text-slate-500">~195 KB</span>
+                <span className="text-xs font-semibold text-slate-500">v3.5 Signed</span>
               </a>
             )}
 
@@ -301,20 +345,22 @@ export const ProfileSettingsSheet: React.FC<Props> = ({
               >
                 <span className="flex items-center gap-3 text-[15px] font-medium text-slate-900 dark:text-white">
                   <KeyRound className="w-5 h-5 text-slate-700 dark:text-slate-300 stroke-[1.75]" />
-                  Optional API Boosters
+                  Frontier Free API Boosters
                 </span>
                 <ChevronRight className="w-4 h-4 text-slate-400" />
               </button>
               {showBoosters && (
                 <div className="mt-3 space-y-2.5 text-xs">
                   <p className="text-slate-500 dark:text-slate-400">
-                    100% optional — Open Brain runs completely free and unlimited without any keys.
+                    100% optional — Open Brain runs unlimited free out of the box. Add free OpenRouter, Groq, HF, or Gemini keys for dedicated frontier clusters:
                   </p>
                   <input
                     type="password"
-                    value={settings.hfToken}
-                    onChange={(e) => onUpdateSettings({ hfToken: e.target.value })}
-                    placeholder="HuggingFace Token hf_... (optional)"
+                    value={settings.openrouterApiKey || ''}
+                    onChange={(e) =>
+                      onUpdateSettings({ openrouterApiKey: e.target.value })
+                    }
+                    placeholder="OpenRouter Free Key sk-or-... (DeepSeek-R1 / Qwen / Llama :free)"
                     className="w-full rounded-xl bg-[#F5F6F8] dark:bg-[#0E121A] px-3 py-2 text-slate-900 dark:text-white"
                   />
                   <input
@@ -322,6 +368,13 @@ export const ProfileSettingsSheet: React.FC<Props> = ({
                     value={settings.groqApiKey}
                     onChange={(e) => onUpdateSettings({ groqApiKey: e.target.value })}
                     placeholder="Groq Free Key gsk_... (optional)"
+                    className="w-full rounded-xl bg-[#F5F6F8] dark:bg-[#0E121A] px-3 py-2 text-slate-900 dark:text-white"
+                  />
+                  <input
+                    type="password"
+                    value={settings.hfToken}
+                    onChange={(e) => onUpdateSettings({ hfToken: e.target.value })}
+                    placeholder="HuggingFace Token hf_... (optional)"
                     className="w-full rounded-xl bg-[#F5F6F8] dark:bg-[#0E121A] px-3 py-2 text-slate-900 dark:text-white"
                   />
                   <input
@@ -349,7 +402,7 @@ export const ProfileSettingsSheet: React.FC<Props> = ({
               </button>
               {showAbout && (
                 <p className="mt-2.5 text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-                  Open Brain v3.0 combines Smart Multi-Model Routing, Parallel Mixture-of-Agents Council synthesis (DeepSeek-R1 + Qwen 2.5 Coder 32B + Llama 3.3 70B + Omni-4o Vision), Hardware H.264 MP4 Sandbox Video, Zero-Shot Voice Cloning, Flux.1 HD Art, Modular SKILL.md Skills, Live MCP Connectors, and Native Android Phone OS Control with zero phone RAM or battery bloat.
+                  Open Brain v3.5 Ultra unites Smart Multi-Model Routing, 3-Specialist Parallel Council Synthesis (DeepSeek-R1 + Qwen 2.5 Coder 32B + Llama 3.3 70B), Self-Verifying Critic Loops, Permanent Personal Memory, Multi-Wave Deep Research, Hardware H.264 MP4 Video, Zero-Shot Voice Cloning, Flux.1 HD Art, and Native Android Phone OS Control.
                 </p>
               )}
             </div>
