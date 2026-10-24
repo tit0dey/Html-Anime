@@ -1,0 +1,30 @@
+{
+  "name": "open-brain",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Open Brain — Free & Unlimited Super-Agent with Claude-Style Skills, MCP Connectors, Code-to-MP4 Sandbox Video Renderer, Zero-Shot Voice Cloning, Android Phone Control & Featherlight APK",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0 --port 5173",
+    "build": "vite build",
+    "preview": "node server/index.mjs",
+    "start": "node server/index.mjs",
+    "build:apk": "node android/scripts/build-apk-standalone.mjs"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "lucide-react": "^0.475.0",
+    "mp4-muxer": "^5.2.2",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.0.9",
+    "@types/react": "^19.0.10",
+    "@types/react-dom": "^19.0.4",
+    "@vitejs/plugin-react": "^4.3.4",
+    "tailwindcss": "^4.0.9",
+    "typescript": "~5.7.3",
+    "vite": "^6.2.0"
+  }
+}

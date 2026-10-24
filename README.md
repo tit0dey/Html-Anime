@@ -1,21 +1,61 @@
 <div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
+
+<img src="./public/icon.svg" width="110" height="110" alt="Open Brain Logo" />
+
+# Open Brain
+### **100% Free, Unlimited & Zero-Phone-Pressure AI Super-Agent + Native Android APK**
+
+[![Android APK](https://img.shields.io/badge/Android_APK-OpenBrain_v2.0_Signed-14B8A6?style=for-the-badge&logo=android&logoColor=white)](./apk/OpenBrain-AI.apk)
+[![Zero Phone Pressure](https://img.shields.io/badge/Featherlight-~190_KB_•_0%25_Phone_Lag-0D9488?style=for-the-badge)](#)
+[![Free Unlimited](https://img.shields.io/badge/100%25_Free-Unlimited_Zero_API_Key-0F766E?style=for-the-badge)](#)
+
+**Claude-Style Skills (`SKILL.md`) • Live MCP Connectors • Code-to-MP4 Sandbox Video Renderer • Android Phone OS Control • Zero-Shot Voice Cloning • Flux.1 HD Art**
+
 </div>
 
-# Run and deploy your AI Studio app
+---
 
-This contains everything you need to run your app locally.
+## Direct Android APK Download
 
-View your app in AI Studio: https://ai.studio/apps/7b1dd8e3-2e8e-4348-b9c0-8e896430d755
+Your ready-to-install **Featherlight (~190 KB), Zero-Phone-Pressure, V2+V3 Signed Android APK** is located directly inside this repository:
 
-## Run Locally
+**[Download `OpenBrain-AI.apk` (`apk/OpenBrain-AI.apk`)](./apk/OpenBrain-AI.apk)**
 
-**Prerequisites:**  [Android Studio](https://developer.android.com/studio)
+### Phone Installation Steps:
+1. Open **[`apk/OpenBrain-AI.apk`](./apk/OpenBrain-AI.apk)** and tap **Download raw file** (or tap **Get APK** inside the web app).
+2. Open the downloaded `.apk` file on your Android device and tap **Install** (Package: `com.openbrain.ai`, compatible with Android 7.0 through Android 16+).
+3. **Zero Phone Pressure**: The app weighs under 200 KB, stores zero heavy local AI model files on your phone, and suspends timers automatically via `onPause()` for **0% background battery and CPU drain**.
 
+---
 
-1. Open Android Studio
-2. Select **Open** and choose the directory containing this project
-3. Allow Android Studio to fix any incompatibilities as it imports the project.
-4. Create a file named `.env` in the project directory and set `GEMINI_API_KEY` in that file to your Gemini API key (see `.env.example` for an example)
-5. Remove this line from the app's `build.gradle.kts` file: `signingConfig = signingConfigs.getByName("debugConfig")`
-6. Run the app on an emulator or physical device
+## Core Capabilities
+
+| Module | Capabilities | Open-Source Engines |
+| :--- | :--- | :--- |
+| **Claude-Style Code to Sandbox `.MP4` Video** | Writes deterministic JavaScript Canvas2D / Manim-style animation code, validates & executes it in Sandbox, and muxes real H.264 `.mp4` video via hardware `VideoEncoder` + `mp4-muxer` in ~2 seconds. Includes live code editor & re-rendering. | `Qwen 2.5 Coder 32B` + WebCodecs Hardware H.264 + `mp4-muxer` + Flux Cinema Director + `Wan2.1` / `LTX-Video` |
+| **Claude-Style Modular Skills (`SKILL.md`)** | 7 built-in Pro Skills + Custom Skill Creator, AI Auto-Write Skill, and `.md` (`SKILL.md`) file importer. | Dynamic Cortex Skill Injection |
+| **Live App & MCP Connectors** | 8 live connectors (**Android Phone OS**, **GitHub**, **Live Web/Wiki/DDG**, **Open-Meteo Weather**, **CoinGecko Markets**, **ArXiv Papers**, **Reddit/HN Pulse**, **HuggingFace ZeroGPU**) + **Custom Webhook / MCP HTTP Bridge** (n8n, Telegram, Slack, Notion). | Zero-Key Open REST + Custom HTTP/MCP Webhooks |
+| **Full Android Phone Control** | Control system Alarms, Countdown Timers, WhatsApp, SMS, Phone Dialer, Calendar Reminders, Google Maps, YouTube, System Settings (Wi-Fi/Bluetooth/Sound/Display/Battery), Battery/Thermal monitor, and Scoped Storage saving to `Downloads/OpenBrain/`. | Native `OpenBrainNativeBridge` (`MainActivity.java`) |
+| **Universal Multilingual Input** | Clean English interface while effortlessly understanding user messages typed or spoken in **any language** (English, Banglish, Bengali, Hindi, Spanish, Arabic, Japanese, and 100+ more). | **DeepSeek-R1**, **Qwen 2.5 Coder 32B**, **Llama 3.3 70B**, **Mistral**, **Omni-GPT4o Vision** |
+| **Zero-Shot Voice Cloning Lab & Flux.1 Art** | Record 6–12s voice samples or upload `.wav`/`.mp3` -> Vocal DNA Biometrics ($F_0$ Hz, Warmth, Timbre) + **F5-TTS / CosyVoice ZeroGPU + Acoustic Voice Twin DSP** -> 16-bit `.wav` export, plus watermark-free **Flux.1** HD image generation. | `SWivid F5-TTS`, `CosyVoice`, Neural OpenAI-Audio, `Black Forest Labs Flux.1` |
+
+---
+
+## Run Locally or Rebuild APK
+
+```bash
+# Install dependencies
+npm install
+
+# Run development server
+npm run dev
+
+# Build production web app & start server
+npm run build
+npm start
+```
+
+---
+
+## License
+100% Free & Open-Source (MIT) — **Open Brain**.

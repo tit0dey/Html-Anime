@@ -1,6 +1,0 @@
-{
-  "name": "TradeIQ",
-  "description": "Trading skills quiz app evaluating chart reading, risk management, and trading psychology.",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
-}
