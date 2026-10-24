@@ -1,62 +1,35 @@
-<div align="center">
+# HTML-Anime Studio (v1.0.0)
 
-<img src="./public/icon.svg" width="108" height="108" alt="Open Brain Logo" />
+**100% Free & Unlimited · Zero API Keys · Direct Idea/Script to `.MP4` Anime & Motion Film Studio (Web + Android APK)**
 
-# Open Brain v4.5 Voicebox & Native-Mesh Edition
-### **100% Free, Unlimited & Zero-Phone-Pressure Autonomous AI Super-Agent + Android APK**
+Inspired by [`blixvip/html-anime`](https://github.com/blixvip/html-anime), **HTML-Anime Studio** eliminates the need to copy-paste shot sheets into external coding agents (Claude Code / Codex) or run desktop CLI capture tools (`npx hyperframes`). Everything happens **inside the app itself** — from autonomous 24fps shot-sheet direction to live cel-shaded Canvas2D preview, procedural cinema soundtrack synthesis, and hardware-accelerated H.264 + AAC `.mp4` rendering.
 
-[![Download Android APK](https://img.shields.io/badge/Download_APK-OpenBrain_v4.5_Signed-111827?style=for-the-badge&logo=android&logoColor=white)](https://github.com/tit0dey/TradeIQ/raw/main/apk/OpenBrain-AI.apk)
-[![Zero Phone Pressure](https://img.shields.io/badge/Featherlight-~240_KB_•_0%25_Phone_Lag-0F766E?style=for-the-badge)](#)
-[![Free Unlimited](https://img.shields.io/badge/100%25_Free-Multi--Cloud_Mesh_+_Voicebox-14B8A6?style=for-the-badge)](#)
+## Core Capabilities
 
-**Unified Chat-First Super-Agent • CORS-Free Android Native Java HTTP • Multi-Cloud Free AI Mesh (Pollinations + HF ZeroGPU Qwen/DeepSeek) • Voicebox Multi-Engine Voice Cloning (Chatterbox / Qwen3-TTS / F5-TTS / Vocal DNA Pedalboard) • Self-Healing Code Interpreter • BM25 Multi-File RAG • Permanent Memory • Deep Research • Code-to-MP4 Video • Native Android Phone Control**
+- **Topic, Short Idea, or Full Story Script Input**: Supports any length and any language (English, Bangla, Banglish, Hindi, Japanese, etc.).
+- **Landscape (`16:9`), Vertical (`9:16`), & Square (`1:1`)**: True aspect-aware anime framing (`1280×720` / `720×1280` 720p Fast HD or `1920×1080` / `1080×1920` 1080p Full HD).
+- **Custom Duration (`Minutes` + `Seconds`)**: Choose any custom runtime from `4 seconds` up to `10 minutes` (`600s`) — frame-accurately partitioned at `24 FPS`.
+- **8 Closed 10-Hex Anime Color Scripts**: `Indigo Moon`, `Vermilion Eclipse`, `Paper Noon`, `Lantern Festival`, `Neo-Tokyo Cyber`, `Twilight Comet`, `Sakura Dusk`, and `Emerald Shrine`.
+- **Authentic `html-anime` Cel & Timing Craft**:
+  - Character acting and cloth follow-through animated on **twos** (`12fps` holds inside `24fps`).
+  - Rain streaks, sakura petals, embers, snow, and sakuga impact sparks animated on **ones** (`24fps`).
+  - **5-Beat Sakuga Climax** (anticipation coil, high-speed smear silhouette + speed lines, stark 2-frame inverted impact flash, sweeping crescent blade slash, and 12-frame landed hold).
+  - Full-frame **Color-Dip Cuts** and 8-frame closing fade to `ink`.
+- **Streaming Zero-Lag On-Device `.MP4` Renderer**:
+  - Encodes frames directly into H.264 (`VideoEncoder`) + procedural cinema pad/rain/sakuga audio into AAC (`AudioEncoder`) via `mp4-muxer` with **0 MB uncompressed frame buffering** and hardware backpressure guards so phones stay cool and fast.
+- **Native Signed Android APK (`apk/HTML-Anime-Studio.apk`)**:
+  - Signed with V1 + V2 + V3 Android cryptographic signatures, 4-byte aligned, dark cinema system bars, background 0%-CPU lifecycle guard, and direct saving to `Downloads/HTMLAnimeStudio/`.
 
-</div>
-
----
-
-## Direct 1-Tap Android APK Download
-
-Click the direct raw link below in **Chrome** (or tap **Download** from the `⋮` menu in the GitHub mobile app) to download and install **`OpenBrain-AI.apk`** directly on your phone:
-
-**[Direct Download `OpenBrain-AI.apk` (v4.5 Signed)](https://github.com/tit0dey/TradeIQ/raw/main/apk/OpenBrain-AI.apk)**
-
-- **Package**: `com.openbrain.ai` (`versionName: 4.5.0`, `versionCode: 6`, Android 7.0 – Android 16+)
-- **Featherlight Footprint**: Under 200 KB with **0 MB local model bloat** and automatic `onPause()` WebView suspension for **0% background battery drain**.
-
----
-
-## What Makes Open Brain v3.0 Unmatched
-
-1. **Unified Chat-First Premium Interface (Zero Manual Tabs Needed)**
-   - Clean, distraction-free chat experience with **Light**, **Dark**, and **System** appearance modes and **zero paywalls / upgrade banners**.
-   - Just message Open Brain in **any language** (Bangla, Banglish, English, Hindi, Chinese, etc.) — it automatically runs the right engine inline in chat:
-     - Ask for an animation/explainer video -> writes Canvas2D JS code in Sandbox & muxes hardware H.264 **`.mp4` video** inline.
-     - Ask for a cinematic/realistic video -> renders multi-scene **Flux Cinema + Neural Voiceover `.mp4`** inline.
-     - Ask *"can you clone my voice?"* or ask it to speak -> opens an inline **Zero-Shot Voice Recorder** or synthesizes cloned `.wav` speech inline.
-     - Ask for artwork or wallpapers -> renders watermark-free **Flux.1 HD** images inline.
-     - Ask to build an app or game -> compiles & previews a live interactive **HTML5 App** inline.
-     - Ask to set an alarm, timer, WhatsApp, call, Maps, or phone setting -> executes natively via **`OpenBrainNativeBridge`**.
-
-2. **Smart `Auto` Router + Parallel Mixture-of-Agents (`Council MoA`)**
-   - **`Auto` (Default)**: Automatically routes coding to **Qwen 2.5 Coder 32B**, math/logic to **DeepSeek-R1**, vision to **Omni-4o Vision**, and general synthesis to **Llama 3.3 70B**.
-   - **`OpenBrain Council (MoA)` / `Max` Effort**: Runs **DeepSeek-R1** and **Qwen 2.5 Coder 32B** in parallel, cross-verifies logic and edge cases, and synthesizes one unified response with a collapsible **Thought Process** trace.
-
-3. **`+` Add to Chat Sheet & Slide-Out Drawer**
-   - **`+` Add to Chat**: Attach **Image**, snap **Camera**, attach **File / Audio Voice Sample**, or manage **Skills (`SKILL.md`)**, **MCP Connectors**, **Voice Cloning Lab**, and **Phone OS Control**.
-   - **Slide-Out Drawer**: Access **Phone Control**, **Assets** (all generated MP4 videos, WAV voice clips, HD images, and HTML5 apps saved in one place), **Skills & More**, **Pinned / Projects / Recents** conversations, and **Profile & Appearance**.
-
----
-
-## Run Locally or Rebuild APK
+## Quick Start
 
 ```bash
 npm install
-npm run dev
-npm run build:apk
+npm run build
+npm start
 ```
 
----
+To rebuild the standalone signed Android `.apk`:
 
-## License
-100% Free & Open-Source (MIT) — **Open Brain**.
+```bash
+npm run build:apk
+```
