@@ -131,10 +131,10 @@ async function runGitHubSearchTool(query: string, ghToken?: string): Promise<str
     const data = await resp.json();
     const items = data?.items || [];
     if (!items.length) return `No open-source GitHub repositories matched "${query}".`;
-    return items
+      return items
       .map(
         (repo: Record<string, unknown>) =>
-          `• ${repo.full_name} (⭐ ${repo.stargazers_count}, ${
+          `- ${repo.full_name} (${repo.stargazers_count} stars, ${
             repo.language || 'Multi'
           }) — ${repo.description || 'No description'} | ${repo.html_url}`
       )
@@ -310,11 +310,7 @@ export async function runOpenBrainAutonomousAgent(params: {
   const enabledWebhooks = webhooks.filter((w) => w.enabled);
 
   const langHint =
-    settings.language === 'bn'
-      ? 'Respond naturally in বাংলা (Bengali) script unless code/technical terms require English.'
-      : settings.language === 'banglish'
-      ? 'Match the user’s language naturally (Banglish — Bengali in English alphabet, বাংলা, or English).'
-      : 'Match the user’s language naturally.';
+    'Understand user input written in ANY language or Romanized script (including English, Banglish, Bengali, Hindi, Spanish, Arabic, etc.) effortlessly. Always write your interface/assistant responses in clear, natural English unless the user explicitly asks you to reply in another specific language. Do not use emoji stickers.';
 
   const toolObservations: string[] = [];
 
@@ -522,11 +518,11 @@ If the user greets or asks a conceptual/writing question needing no external too
   const skillsDirective =
     enabledSkills.length > 0
       ? `\nACTIVE MODULAR SKILLS (${enabledSkills.length}):\n` +
-        enabledSkills.map((s) => `• [${s.icon} ${s.name}]: ${s.instructions}`).join('\n')
+        enabledSkills.map((s) => `- [${s.name}]: ${s.instructions}`).join('\n')
       : '';
 
   const systemInstruction = `You are **Open Brain** — an ultra-powerful, 100% Free & Unlimited Open-Source AI Super-Agent created for Android APK & Web, engineered with Featherlight Zero-Phone-Pressure architecture (all heavy AI compute runs in free cloud clusters + hardware MP4 encoding so the user's phone never heats up or lags).
-Core Capabilities: Modular Skills (like Claude Skills), Live App Connectors (GitHub, Web/Wiki, Weather, Crypto ₹ INR, Research Papers, Reddit/HN, Custom Webhooks), Claude-Style Programmatic Code -> Sandbox H.264 .mp4 Video Rendering, Zero-Shot Voice Cloning (F5-TTS/CosyVoice + Vocal DNA Twin), Flux.1 HD Art, and Full Android Phone OS Control (Alarms, Timers, WhatsApp, SMS, Dialer, Maps, Calendar, YouTube, Settings, Battery).
+Core Capabilities: Modular Skills (like Claude Skills), Live App Connectors (GitHub, Web/Wiki, Weather, Crypto INR/USD, Research Papers, Reddit/HN, Custom Webhooks), Claude-Style Programmatic Code to Sandbox H.264 .mp4 Video Rendering, Zero-Shot Voice Cloning (F5-TTS/CosyVoice + Vocal DNA Twin), Flux.1 HD Art, and Full Android Phone OS Control (Alarms, Timers, WhatsApp, SMS, Dialer, Maps, Calendar, YouTube, Settings, Battery).
 ${langHint}${skillsDirective}${
     toolObservations.length > 0
       ? `\n\nLIVE TOOL & CONNECTOR RESULTS GATHERED JUST NOW:\n${toolObservations.join(
@@ -559,6 +555,6 @@ ${langHint}${skillsDirective}${
     phoneActions,
     codeArtifact,
     toolSteps: steps,
-    activeSkillNames: enabledSkills.map((s) => `${s.icon} ${s.name}`),
+    activeSkillNames: enabledSkills.map((s) => s.name),
   };
 }

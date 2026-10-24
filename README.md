@@ -2,12 +2,12 @@
 
 <img src="./public/icon.svg" width="110" height="110" alt="Open Brain Logo" />
 
-# 🧠 Open Brain (ওপেন ব্রেইন)
+# Open Brain
 ### **100% Free, Unlimited & Zero-Phone-Pressure AI Super-Agent + Native Android APK**
 
-[![Android APK](https://img.shields.io/badge/Android_APK-OpenBrain_v2.0_Signed-10B981?style=for-the-badge&logo=android&logoColor=white)](./apk/OpenBrain-AI.apk)
-[![Zero Phone Pressure](https://img.shields.io/badge/Featherlight-~200_KB_•_0%25_Phone_Lag-06B6D4?style=for-the-badge)](#)
-[![Cost](https://img.shields.io/badge/100%25_Free-Unlimited_Zero_API_Key-8B5CF6?style=for-the-badge)](#)
+[![Android APK](https://img.shields.io/badge/Android_APK-OpenBrain_v2.0_Signed-14B8A6?style=for-the-badge&logo=android&logoColor=white)](./apk/OpenBrain-AI.apk)
+[![Zero Phone Pressure](https://img.shields.io/badge/Featherlight-~190_KB_•_0%25_Phone_Lag-0D9488?style=for-the-badge)](#)
+[![Free Unlimited](https://img.shields.io/badge/100%25_Free-Unlimited_Zero_API_Key-0F766E?style=for-the-badge)](#)
 
 **Claude-Style Skills (`SKILL.md`) • Live MCP Connectors • Code-to-MP4 Sandbox Video Renderer • Android Phone OS Control • Zero-Shot Voice Cloning • Flux.1 HD Art**
 
@@ -15,33 +15,33 @@
 
 ---
 
-## 📱 Direct Android APK Download (ফোনে সরাসরি ইনস্টল করো!)
+## Direct Android APK Download
 
-তোমার ফোনের জন্য তৈরি **Featherlight (~200 KB), Zero-Phone-Pressure, V2+V3 Signed Android APK** সরাসরি এই রেপোর ভেতরেই দেওয়া আছে:
+Your ready-to-install **Featherlight (~190 KB), Zero-Phone-Pressure, V2+V3 Signed Android APK** is located directly inside this repository:
 
-👉 **[Download `OpenBrain-AI.apk` (`apk/OpenBrain-AI.apk`)](./apk/OpenBrain-AI.apk)**
+**[Download `OpenBrain-AI.apk` (`apk/OpenBrain-AI.apk`)](./apk/OpenBrain-AI.apk)**
 
-### কীভাবে ইনস্টল করবে:
-1. উপরের **`apk/OpenBrain-AI.apk`** লিঙ্কে ক্লিক করে **`Download raw file`** চাপো (অথবা ওয়েব প্রিভিউয়ের **Get APK** বাটনে ক্লিক করো)।
-2. ফোনে ডাউনলোড হয়ে গেলে **Install** চাপো (Package: `com.openbrain.ai`, Android 7.0 – 16+ সাপোর্টেড)।
-3. **ফোনের ওপর কোনো চাপ (Zero Pressure) পড়বে না**: অ্যাপটি মাত্র ~200 KB, কোনো ভারী লোকাল মডেল ফোনের RAM/Storage দখল করে না, এবং অ্যাপ মিনিমাইজ করলে `onPause()` সাসপেনশনের মাধ্যমে **0% ব্যাকগ্রাউন্ড ব্যাটারি ও CPU** খরচ করে!
+### Phone Installation Steps:
+1. Open **[`apk/OpenBrain-AI.apk`](./apk/OpenBrain-AI.apk)** and tap **Download raw file** (or tap **Get APK** inside the web app).
+2. Open the downloaded `.apk` file on your Android device and tap **Install** (Package: `com.openbrain.ai`, compatible with Android 7.0 through Android 16+).
+3. **Zero Phone Pressure**: The app weighs under 200 KB, stores zero heavy local AI model files on your phone, and suspends timers automatically via `onPause()` for **0% background battery and CPU drain**.
 
 ---
 
-## 🔥 কেন Open Brain সাধারণ AI বা Claude-এর থেকেও বেশি শক্তিশালী?
+## Core Capabilities
 
-| মডিউল | কী কী করতে পারে? | ব্যবহৃত ফ্রি ওপেন-সোর্স ইঞ্জিন |
+| Module | Capabilities | Open-Source Engines |
 | :--- | :--- | :--- |
-| 🎬 **Claude-Style Code -> Sandbox `.MP4` Video** | যেকোনো অ্যানিমেশন, Manim ম্যাথ প্রুফ বা এক্সপ্লেইনার ভিডিও বললে **Open Brain নিজেই JavaScript Canvas2D অ্যানিমেশন কোড লেখে**, Sandbox-এ রেন্ডার করে এবং ফোনের হার্ডওয়্যার `VideoEncoder` + `mp4-muxer` দিয়ে মাত্র ~২ সেকেন্ডে আসল **H.264 `.mp4` ভিডিও** তৈরি করে দেয়! এমনকি তুমি সেই কোড এডিট করেও পুনরায় `.mp4` রেন্ডার করতে পারবে! | `Qwen 2.5 Coder 32B` + WebCodecs Hardware H.264 + `mp4-muxer` + Flux Cinema Director + `Wan2.1` / `LTX-Video` |
-| 🧠 **Claude-Style Modular Skills (`SKILL.md`)** | ৭টি প্রো বিল্ট-ইন স্কিল + নিজের **Custom Skill** তৈরি, **AI Auto-Write Skill**, এবং সরাসরি `.md` (`SKILL.md`) ফাইল ইমপোর্ট করার অপশন! | Dynamic Cortex Skill Injection |
-| 🔌 **Live App & MCP Connectors** | ৮টি লাইভ কানেক্টর (**Android Phone OS**, **GitHub**, **Live Web/Wiki/DDG**, **Open-Meteo Weather**, **CoinGecko ₹ INR**, **ArXiv Papers**, **Reddit/HN Pulse**, **HuggingFace ZeroGPU**) + **Custom Webhook / MCP HTTP Bridge** (n8n, Telegram, Slack, Notion)! | Zero-Key Open REST + Custom HTTP/MCP Webhooks |
-| 📱 **Full Android Phone Control** | বাংলা/Banglish বা English-এ বললেই ফোনের **System Alarm সেট করা**, **Countdown Timer চালানো**, **WhatsApp ও SMS পাঠানো**, **ফোন ডায়াল করা**, **Calendar রিমাইন্ডার**, **Google Maps ও YouTube ওপেন করা**, **Wi-Fi/Bluetooth/Sound Settings কন্ট্রোল**, **Battery ও Thermal স্ট্যাটাস দেখা**, এবং `Downloads/OpenBrain/` ফোল্ডারে ফাইল সেভ করা! | Native `OpenBrainNativeBridge` (`MainActivity.java`) |
-| 🎙️ **Zero-Shot Voice Cloning Lab** | ফোনের মাইক্রোফোনে ৬–১২ সেকেন্ড গলা রেকর্ড বা `.wav`/`.mp3` আপলোড করে **Vocal DNA Biometrics** ($F_0$ Hz, Warmth, Timbre) এবং **F5-TTS / CosyVoice ZeroGPU + Acoustic Voice Twin DSP** দিয়ে নিজের গলায় স্পিচ তৈরি ও `.wav` ডাউনলোড! | `SWivid F5-TTS`, `CosyVoice`, Neural OpenAI-Audio, WebAudio Offline DSP |
-| 🎨 **Unlimited Flux.1 Art & 💻 App Builder** | ওয়াটারমার্ক ছাড়া HD ইমেজ জেনারেশন এবং যেকোনো অ্যাপ বা টাচ গেম প্রম্পট থেকেই লাইভ তৈরি ও রান করা। | `Black Forest Labs Flux.1` + `Qwen 2.5 Coder 32B` |
+| **Claude-Style Code to Sandbox `.MP4` Video** | Writes deterministic JavaScript Canvas2D / Manim-style animation code, validates & executes it in Sandbox, and muxes real H.264 `.mp4` video via hardware `VideoEncoder` + `mp4-muxer` in ~2 seconds. Includes live code editor & re-rendering. | `Qwen 2.5 Coder 32B` + WebCodecs Hardware H.264 + `mp4-muxer` + Flux Cinema Director + `Wan2.1` / `LTX-Video` |
+| **Claude-Style Modular Skills (`SKILL.md`)** | 7 built-in Pro Skills + Custom Skill Creator, AI Auto-Write Skill, and `.md` (`SKILL.md`) file importer. | Dynamic Cortex Skill Injection |
+| **Live App & MCP Connectors** | 8 live connectors (**Android Phone OS**, **GitHub**, **Live Web/Wiki/DDG**, **Open-Meteo Weather**, **CoinGecko Markets**, **ArXiv Papers**, **Reddit/HN Pulse**, **HuggingFace ZeroGPU**) + **Custom Webhook / MCP HTTP Bridge** (n8n, Telegram, Slack, Notion). | Zero-Key Open REST + Custom HTTP/MCP Webhooks |
+| **Full Android Phone Control** | Control system Alarms, Countdown Timers, WhatsApp, SMS, Phone Dialer, Calendar Reminders, Google Maps, YouTube, System Settings (Wi-Fi/Bluetooth/Sound/Display/Battery), Battery/Thermal monitor, and Scoped Storage saving to `Downloads/OpenBrain/`. | Native `OpenBrainNativeBridge` (`MainActivity.java`) |
+| **Universal Multilingual Input** | Clean English interface while effortlessly understanding user messages typed or spoken in **any language** (English, Banglish, Bengali, Hindi, Spanish, Arabic, Japanese, and 100+ more). | **DeepSeek-R1**, **Qwen 2.5 Coder 32B**, **Llama 3.3 70B**, **Mistral**, **Omni-GPT4o Vision** |
+| **Zero-Shot Voice Cloning Lab & Flux.1 Art** | Record 6–12s voice samples or upload `.wav`/`.mp3` -> Vocal DNA Biometrics ($F_0$ Hz, Warmth, Timbre) + **F5-TTS / CosyVoice ZeroGPU + Acoustic Voice Twin DSP** -> 16-bit `.wav` export, plus watermark-free **Flux.1** HD image generation. | `SWivid F5-TTS`, `CosyVoice`, Neural OpenAI-Audio, `Black Forest Labs Flux.1` |
 
 ---
 
-## 🛠️ Run Locally or Rebuild APK
+## Run Locally or Rebuild APK
 
 ```bash
 # Install dependencies
@@ -57,5 +57,5 @@ npm start
 
 ---
 
-## 📜 License
+## License
 100% Free & Open-Source (MIT) — **Open Brain**.

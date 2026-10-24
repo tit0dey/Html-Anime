@@ -87,7 +87,7 @@ export async function executePhoneAction(payload: PhoneActionPayload): Promise<s
         }
         if (typeof navigator !== 'undefined' && 'getBattery' in navigator) {
           const bat: any = await (navigator as any).getBattery();
-          return `Battery: ${Math.round(bat.level * 100)}% (${bat.charging ? 'Charging ⚡' : 'On Battery'})`;
+          return `Battery: ${Math.round(bat.level * 100)}% (${bat.charging ? 'Charging' : 'On Battery'})`;
         }
         return 'Device running in Featherlight Zero-Pressure Cloud-Offload mode (0% background drain).';
       }

@@ -3,7 +3,6 @@ import {
   Download,
   Image as ImageIcon,
   Loader2,
-  RefreshCw,
   Sparkles,
   Wand2,
 } from 'lucide-react';
@@ -92,11 +91,11 @@ export const ImageStudio: React.FC<Props> = ({ settings }) => {
 
   return (
     <div className="space-y-4 pb-8">
-      <div className="glass-card rounded-2xl p-4 border border-violet-500/25 space-y-3">
+      <div className="glass-card rounded-2xl p-4 border border-teal-500/25 space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-600 to-emerald-500 flex items-center justify-center shadow-lg">
-              <ImageIcon className="w-5 h-5 text-white" />
+            <div className="w-10 h-10 rounded-xl bg-teal-500/15 border border-teal-500/35 flex items-center justify-center">
+              <ImageIcon className="w-5 h-5 text-teal-400" />
             </div>
             <div>
               <h2 className="font-bold text-base sm:text-lg text-white">
@@ -107,7 +106,7 @@ export const ImageStudio: React.FC<Props> = ({ settings }) => {
               </p>
             </div>
           </div>
-          <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-violet-500/15 text-violet-300 border border-violet-500/30">
+          <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-teal-500/15 text-teal-300 border border-teal-500/30">
             HD NO WATERMARK
           </span>
         </div>
@@ -116,8 +115,8 @@ export const ImageStudio: React.FC<Props> = ({ settings }) => {
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
           rows={3}
-          placeholder="Describe any image, logo, character, or wallpaper..."
-          className="w-full rounded-xl bg-slate-950 border border-slate-800 p-3 text-sm text-white focus:outline-none focus:border-violet-500"
+          placeholder="Describe any image, logo, character, or wallpaper (in any language)..."
+          className="w-full rounded-xl bg-slate-950 border border-slate-800 p-3 text-sm text-white focus:outline-none focus:border-teal-500"
         />
 
         <div className="grid grid-cols-3 gap-2">
@@ -168,9 +167,13 @@ export const ImageStudio: React.FC<Props> = ({ settings }) => {
             type="button"
             disabled={!prompt.trim() || enhancing || loading}
             onClick={handleEnhance}
-            className="px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-xs font-semibold text-violet-300 flex items-center gap-1.5 disabled:opacity-40"
+            className="px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-xs font-semibold text-teal-300 flex items-center gap-1.5 disabled:opacity-40"
           >
-            {enhancing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wand2 className="w-4 h-4" />}
+            {enhancing ? (
+              <Loader2 className="w-4 h-4 animate-spin text-teal-400" />
+            ) : (
+              <Wand2 className="w-4 h-4 text-teal-400" />
+            )}
             Enhance
           </button>
 
@@ -178,7 +181,7 @@ export const ImageStudio: React.FC<Props> = ({ settings }) => {
             type="button"
             disabled={!prompt.trim() || loading}
             onClick={handleGenerate}
-            className="flex-1 py-2.5 px-4 rounded-xl bg-gradient-to-r from-violet-600 to-emerald-500 text-sm font-bold text-white shadow-lg flex items-center justify-center gap-2 disabled:opacity-40"
+            className="flex-1 py-2.5 px-4 rounded-xl bg-gradient-to-r from-teal-500 to-cyan-600 text-sm font-bold text-slate-950 shadow flex items-center justify-center gap-2 disabled:opacity-40"
           >
             {loading ? (
               <>
@@ -207,8 +210,8 @@ export const ImageStudio: React.FC<Props> = ({ settings }) => {
               />
               <div className="p-3 flex items-center justify-between gap-2">
                 <div className="min-w-0">
-                  <div className="text-[10px] font-mono text-violet-300 uppercase">
-                    {item.model} • {item.width}×{item.height}
+                  <div className="text-[10px] font-mono text-teal-400 uppercase">
+                    {item.model} • {item.width}x{item.height}
                   </div>
                   <p className="text-xs text-slate-300 truncate">{item.prompt}</p>
                 </div>
@@ -221,7 +224,7 @@ export const ImageStudio: React.FC<Props> = ({ settings }) => {
                       'image/jpeg'
                     )
                   }
-                  className="shrink-0 flex items-center gap-1 px-3 py-1.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-xs font-semibold text-white"
+                  className="shrink-0 flex items-center gap-1 px-3 py-1.5 rounded-xl bg-teal-500 hover:bg-teal-400 text-xs font-bold text-slate-950"
                 >
                   <Download className="w-3.5 h-3.5" /> Save
                 </button>

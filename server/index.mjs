@@ -56,5 +56,5 @@ app.get('*', (_req, res) => {
 });
 
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🧠 Open Brain Live Server listening on http://0.0.0.0:${PORT}`);
+  console.log(`[Open Brain] Live Server listening on http://0.0.0.0:${PORT}`);
 });

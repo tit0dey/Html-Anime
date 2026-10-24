@@ -64,8 +64,8 @@ public class MainActivity extends Activity {
 
         Window window = getWindow();
         if (window != null && Build.VERSION.SDK_INT >= 21) {
-            window.setStatusBarColor(Color.parseColor("#06080F"));
-            window.setNavigationBarColor(Color.parseColor("#070A12"));
+            window.setStatusBarColor(Color.parseColor("#050A0E"));
+            window.setNavigationBarColor(Color.parseColor("#050A0E"));
         }
 
         nativeTts = new TextToSpeech(this, new TextToSpeech.OnInitListener() {
@@ -73,16 +73,16 @@ public class MainActivity extends Activity {
             public void onInit(int status) {
                 if (status == TextToSpeech.SUCCESS) {
                     ttsReady = true;
-                    nativeTts.setLanguage(new Locale("en", "IN"));
+                    nativeTts.setLanguage(Locale.US);
                 }
             }
         });
 
         FrameLayout root = new FrameLayout(this);
-        root.setBackgroundColor(Color.parseColor("#06080F"));
+        root.setBackgroundColor(Color.parseColor("#050A0E"));
 
         webView = new WebView(this);
-        webView.setBackgroundColor(Color.parseColor("#06080F"));
+        webView.setBackgroundColor(Color.parseColor("#050A0E"));
 
         WebSettings ws = webView.getSettings();
         ws.setJavaScriptEnabled(true);

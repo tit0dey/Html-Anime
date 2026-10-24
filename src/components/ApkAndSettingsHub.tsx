@@ -5,10 +5,10 @@ import {
   Download,
   Feather,
   Github,
+  Globe,
   KeyRound,
   ShieldCheck,
   Smartphone,
-  Sparkles,
 } from 'lucide-react';
 import { AppSettings } from '../types';
 import { isRunningInAndroidApk } from '../services/nativeBridge';
@@ -19,7 +19,7 @@ interface Props {
 }
 
 const OPEN_SOURCE_ARSENAL = [
-  { name: 'Claude-Style Code -> MP4 Sandbox', role: 'Canvas/Manim JS + Hardware H.264 mp4-muxer', status: 'Active' },
+  { name: 'Claude-Style Code to MP4 Sandbox', role: 'Canvas/Manim JS + Hardware H.264 mp4-muxer', status: 'Active' },
   { name: 'Modular Skills + MCP Connectors', role: 'SKILL.md Engine + 8 Live Connectors + Webhooks', status: 'Active' },
   { name: 'Android Phone OS Native Bridge', role: 'Alarms, Timers, WhatsApp, SMS, Calls, Maps, Settings', status: 'Active' },
   { name: 'DeepSeek-R1 + Qwen 2.5 Coder + Llama 3.3', role: 'Zero-Key Cloud LLM Inference (0% Phone Load)', status: 'Active' },
@@ -36,33 +36,33 @@ export const ApkAndSettingsHub: React.FC<Props> = ({ settings, onUpdateSettings 
       <div className="glass-card neon-border rounded-2xl p-5 space-y-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-500 via-cyan-500 to-violet-600 flex items-center justify-center shadow-lg">
-              <Smartphone className="w-6 h-6 text-white" />
+            <div className="w-12 h-12 rounded-2xl bg-teal-500/15 border border-teal-500/40 flex items-center justify-center">
+              <Smartphone className="w-6 h-6 text-teal-400" />
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="font-extrabold text-lg text-white">
                   Open Brain — Official Android APK
                 </h2>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-teal-500/20 text-teal-300 border border-teal-500/40">
                   v2.0 SIGNED
                 </span>
               </div>
               <p className="text-xs text-slate-300 mt-0.5">
-                Package: <code className="text-cyan-300">com.openbrain.ai</code> • Featherlight (~200 KB!) • Zero Phone Pressure
+                Package: <code className="text-teal-300">com.openbrain.ai</code> • Featherlight (~190 KB) • Zero Phone Pressure
               </p>
             </div>
           </div>
 
           {inApk ? (
-            <div className="px-3.5 py-2 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-xs font-bold text-emerald-300 flex items-center gap-1.5">
-              <CheckCircle2 className="w-4 h-4" /> Running Natively Inside Open Brain APK!
+            <div className="px-3.5 py-2 rounded-xl bg-teal-500/20 border border-teal-500/40 text-xs font-bold text-teal-300 flex items-center gap-1.5">
+              <CheckCircle2 className="w-4 h-4 text-teal-400" /> Running Natively Inside Open Brain APK
             </div>
           ) : (
             <a
               href="./OpenBrain-AI.apk"
               download="OpenBrain-AI.apk"
-              className="px-5 py-3 rounded-xl bg-gradient-to-r from-emerald-500 via-cyan-500 to-violet-600 hover:opacity-95 text-sm font-extrabold text-white shadow-lg flex items-center gap-2"
+              className="px-5 py-3 rounded-xl bg-gradient-to-r from-teal-500 to-cyan-600 hover:opacity-95 text-sm font-extrabold text-slate-950 shadow-lg flex items-center gap-2"
             >
               <Download className="w-4 h-4" />
               Download OpenBrain-AI.apk
@@ -73,59 +73,55 @@ export const ApkAndSettingsHub: React.FC<Props> = ({ settings, onUpdateSettings 
         {/* Zero Phone Pressure Architecture Guarantees */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
           <div className="p-3 rounded-xl bg-slate-950 border border-slate-800">
-            <div className="font-bold text-emerald-300 mb-1 flex items-center gap-1.5">
-              <Feather className="w-4 h-4" /> Zero Phone Pressure (~200 KB)
+            <div className="font-bold text-teal-300 mb-1 flex items-center gap-1.5">
+              <Feather className="w-4 h-4 text-teal-400" /> Zero Phone Pressure (~190 KB)
             </div>
             <p className="text-slate-400">
-              All heavy LLM, Flux, and Voice compute runs in free cloud clusters — <b>0 MB model bloat</b> on your phone storage or RAM!
+              All heavy LLM, Flux, and Voice compute runs in free cloud clusters — <b>0 MB model bloat</b> on your phone storage or RAM.
             </p>
           </div>
           <div className="p-3 rounded-xl bg-slate-950 border border-slate-800">
-            <div className="font-bold text-cyan-300 mb-1 flex items-center gap-1.5">
-              <BatteryCharging className="w-4 h-4" /> 0% Background Battery Drain
+            <div className="font-bold text-teal-300 mb-1 flex items-center gap-1.5">
+              <BatteryCharging className="w-4 h-4 text-teal-400" /> 0% Background Battery Drain
             </div>
             <p className="text-slate-400">
-              Native <code className="text-slate-200">onPause()</code> timer suspension freezes WebView instantly when screen locks or app switches!
+              Native <code className="text-slate-200">onPause()</code> timer suspension freezes WebView instantly when your screen locks or switches apps.
             </p>
           </div>
           <div className="p-3 rounded-xl bg-slate-950 border border-slate-800">
-            <div className="font-bold text-violet-300 mb-1 flex items-center gap-1.5">
-              <ShieldCheck className="w-4 h-4" /> Hardware H.264 MP4 Silicon
+            <div className="font-bold text-teal-300 mb-1 flex items-center gap-1.5">
+              <ShieldCheck className="w-4 h-4 text-teal-400" /> Hardware H.264 MP4 Silicon
             </div>
             <p className="text-slate-400">
-              Uses Android hardware <code className="text-slate-200">VideoEncoder</code> + frame yielding so MP4 videos render cool & fast!
+              Uses Android hardware <code className="text-slate-200">VideoEncoder</code> + frame yielding so MP4 videos render cool and fast.
             </p>
           </div>
         </div>
       </div>
 
-      {/* Featherlight & Language Settings */}
+      {/* Featherlight & Multilingual Input Settings */}
       <div className="glass-card rounded-2xl p-4 border border-slate-800 space-y-3">
-        <h3 className="font-bold text-sm text-white">Performance, Language & Agent Controls</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
-          <div>
-            <label className="block text-[11px] text-slate-400 mb-1">Language Style</label>
-            <select
-              value={settings.language}
-              onChange={(e) => onUpdateSettings({ language: e.target.value as any })}
-              className="w-full rounded-xl bg-slate-900 border border-slate-800 px-3 py-2 text-xs text-white"
-            >
-              <option value="banglish">Banglish + English (Auto)</option>
-              <option value="bn">বাংলা (Bengali Script)</option>
-              <option value="en">English</option>
-            </select>
-          </div>
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <h3 className="font-bold text-sm text-white flex items-center gap-2">
+            <Globe className="w-4 h-4 text-teal-400" />
+            <span>Performance & Agent Preferences</span>
+          </h3>
+          <span className="text-[11px] text-teal-300">
+            UI: English • Understands User Input in All Languages
+          </span>
+        </div>
 
-          <label className="flex items-center gap-2.5 p-3 rounded-xl bg-emerald-950/25 border border-emerald-500/35 cursor-pointer text-xs text-emerald-200 font-semibold">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+          <label className="flex items-center gap-2.5 p-3 rounded-xl bg-teal-950/25 border border-teal-500/35 cursor-pointer text-xs text-teal-200 font-semibold">
             <input
               type="checkbox"
               checked={settings.featherlightEcoMode}
               onChange={(e) =>
                 onUpdateSettings({ featherlightEcoMode: e.target.checked })
               }
-              className="accent-emerald-500"
+              className="accent-teal-500"
             />
-            ⚡ Featherlight Zero-Pressure Mode
+            Featherlight Zero-Pressure Mode
           </label>
 
           <label className="flex items-center gap-2.5 p-3 rounded-xl bg-slate-950 border border-slate-800 cursor-pointer text-xs text-slate-200">
@@ -133,7 +129,7 @@ export const ApkAndSettingsHub: React.FC<Props> = ({ settings, onUpdateSettings 
               type="checkbox"
               checked={settings.autonomousAgent}
               onChange={(e) => onUpdateSettings({ autonomousAgent: e.target.checked })}
-              className="accent-violet-500"
+              className="accent-teal-500"
             />
             Autonomous Agent Tools
           </label>
@@ -143,9 +139,9 @@ export const ApkAndSettingsHub: React.FC<Props> = ({ settings, onUpdateSettings 
               type="checkbox"
               checked={settings.autoSpeak}
               onChange={(e) => onUpdateSettings({ autoSpeak: e.target.checked })}
-              className="accent-cyan-500"
+              className="accent-teal-500"
             />
-            Auto-Speak Replies
+            Auto-Speak Assistant Replies
           </label>
         </div>
       </div>
@@ -153,7 +149,7 @@ export const ApkAndSettingsHub: React.FC<Props> = ({ settings, onUpdateSettings 
       {/* Integrated Open-Source Stack */}
       <div className="glass-card rounded-2xl p-4 border border-slate-800 space-y-2.5">
         <h3 className="font-bold text-sm text-white flex items-center gap-2">
-          <Github className="w-4 h-4 text-violet-400" />
+          <Github className="w-4 h-4 text-teal-400" />
           Open Brain Integrated Free Open-Source Stack
         </h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -166,8 +162,9 @@ export const ApkAndSettingsHub: React.FC<Props> = ({ settings, onUpdateSettings 
                 <div className="font-semibold text-slate-200">{item.name}</div>
                 <div className="text-[11px] text-slate-400">{item.role}</div>
               </div>
-              <span className="px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 text-[10px] font-bold">
-                ● {item.status}
+              <span className="px-2 py-0.5 rounded-full bg-teal-500/15 text-teal-300 text-[10px] font-bold flex items-center gap-1">
+                <CheckCircle2 className="w-3 h-3 text-teal-400" />
+                {item.status}
               </span>
             </div>
           ))}
@@ -178,11 +175,11 @@ export const ApkAndSettingsHub: React.FC<Props> = ({ settings, onUpdateSettings 
       <div className="glass-card rounded-2xl p-4 border border-slate-800 space-y-3">
         <div>
           <h3 className="font-bold text-sm text-white flex items-center gap-2">
-            <KeyRound className="w-4 h-4 text-amber-400" />
-            Optional Free Boosters (100% Optional — Runs Unlimited Free Without Any Key!)
+            <KeyRound className="w-4 h-4 text-teal-400" />
+            Optional Free Boosters (100% Optional — Runs Unlimited Free Without Any Key)
           </h3>
           <p className="text-[11px] text-slate-400 mt-0.5">
-            Open Brain works completely free out of the box. Optionally add free HuggingFace, Groq, or Gemini keys if desired.
+            Open Brain runs completely free out of the box. Optionally add free HuggingFace, Groq, or Gemini keys if desired.
           </p>
         </div>
 

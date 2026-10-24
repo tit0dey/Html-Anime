@@ -6,7 +6,7 @@ export const FREE_LLM_MODELS: LLMModelInfo[] = [
     name: 'Omni-GPT4o Mini (Fast)',
     provider: 'Open-Source Router (Free Unlimited)',
     badge: 'DEFAULT • VISION',
-    description: 'Fast multimodal reasoning, Banglish/Bengali/English fluency & Vision.',
+    description: 'Fast multimodal reasoning, universal multilingual comprehension & Vision.',
     supportsVision: true,
   },
   {
@@ -255,13 +255,12 @@ async function callPollinationsDirectFallback(
 }
 
 function stripThinkWrapperIfNeeded(text: string): string {
-  // Format <think>...</think> cleanly into collapsible reasoning quote if present
   if (text.includes('<think>') && text.includes('</think>')) {
     return text.replace(
       /<think>([\s\S]*?)<\/think>/g,
       (_, thought: string) =>
         thought.trim()
-          ? `> **🧠 Reasoning Trace:**\n> ${thought
+          ? `> **Reasoning Trace:**\n> ${thought
               .trim()
               .split('\n')
               .join('\n> ')}\n\n`
