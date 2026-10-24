@@ -41,7 +41,26 @@ function wrapCaptionLines(
 ): string[] {
   const cleaned = text.trim();
   if (!cleaned) return [];
-  const words = cleaned.split(/\s+/);
+  const rawWords = cleaned.split(/\s+/);
+  const words: string[] = [];
+
+  for (const w of rawWords) {
+    if (ctx.measureText(w).width <= maxWidth) {
+      words.push(w);
+    } else {
+      let chunk = '';
+      for (const ch of Array.from(w)) {
+        if (ctx.measureText(chunk + ch).width > maxWidth && chunk) {
+          words.push(chunk);
+          chunk = ch;
+        } else {
+          chunk += ch;
+        }
+      }
+      if (chunk) words.push(chunk);
+    }
+  }
+
   const lines: string[] = [];
   let current = '';
 
@@ -56,6 +75,29 @@ function wrapCaptionLines(
   }
   if (current) lines.push(current);
   return lines.slice(0, 3);
+}
+
+function fillRoundedRect(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  r: number
+): void {
+  const rad = Math.max(0, Math.min(r, w / 2, h / 2));
+  ctx.beginPath();
+  ctx.moveTo(x + rad, y);
+  ctx.lineTo(x + w - rad, y);
+  ctx.arcTo(x + w, y, x + w, y + rad, rad);
+  ctx.lineTo(x + w, y + h - rad);
+  ctx.arcTo(x + w, y + h, x + w - rad, y + h, rad);
+  ctx.lineTo(x + rad, y + h);
+  ctx.arcTo(x, y + h, x, y + h - rad, rad);
+  ctx.lineTo(x, y + rad);
+  ctx.arcTo(x, y, x + rad, y, rad);
+  ctx.closePath();
+  ctx.fill();
 }
 
 /**
@@ -866,15 +908,15 @@ export function renderAnimeFilmFrame(
   paintSkyAndCelestial(ctx, W, H, pal, shot, shotProgress);
 
   // 2. World Depth Layers & Character Staging
-  if (shot.kind === 'close_eyes' || shot.kind === 'button') {
+  if (shot.sakuga || shot.kind === 'sakuga') {
+    const gY = paintWorldLayers(ctx, W, H, pal, shot.world, shot.seed, localFrame);
+    paintSakugaSequence(ctx, W, H, gY, pal, shot, localFrame, shotFrames);
+    paintWeatherOnOnes(ctx, W, H, pal, shot.weather, shot.seed, frameIndex);
+  } else if (shot.kind === 'close_eyes' || shot.kind === 'button') {
     // Weather behind close-up figure so character feels nearer than the rain/petals!
     paintWorldLayers(ctx, W, H, pal, shot.world, shot.seed, localFrame);
     paintWeatherOnOnes(ctx, W, H, pal, shot.weather, shot.seed, frameIndex);
     paintCloseUpAnimePortrait(ctx, W, H, pal, localFrame);
-  } else if (shot.kind === 'sakuga') {
-    const gY = paintWorldLayers(ctx, W, H, pal, shot.world, shot.seed, localFrame);
-    paintSakugaSequence(ctx, W, H, gY, pal, shot, localFrame, shotFrames);
-    paintWeatherOnOnes(ctx, W, H, pal, shot.weather, shot.seed, frameIndex);
   } else if (shot.kind === 'panoramic') {
     paintWorldLayers(ctx, W, H, pal, shot.world, shot.seed, localFrame);
     paintWeatherOnOnes(ctx, W, H, pal, shot.weather, shot.seed, frameIndex);
@@ -932,16 +974,18 @@ export function renderAnimeFilmFrame(
       baseBottomY - ((lines.length - 1) * lineHeight) / 2 + yOffset;
 
     // Subtle dark pill backdrop when letterbox is off or multi-line
-    const widest = Math.max(...lines.map((l) => ctx.measureText(l).width), 60);
+    const widest = Math.min(
+      maxTextW,
+      Math.max(...lines.map((l) => ctx.measureText(l).width), 60)
+    );
     const padX = fontSize * 0.85;
     const padY = fontSize * 0.45;
+    const boxW = Math.min(W * 0.94, widest + padX * 2);
     const boxH = lines.length * lineHeight + padY * 1.4;
     ctx.fillStyle = hexToRgba(pal.ink, 0.76);
-    const rx = W / 2 - widest / 2 - padX;
+    const rx = W / 2 - boxW / 2;
     const ry = startY - lineHeight * 0.5 - padY * 0.65;
-    ctx.beginPath();
-    ctx.roundRect(rx, ry, widest + padX * 2, boxH, 12);
-    ctx.fill();
+    fillRoundedRect(ctx, rx, ry, boxW, boxH, 12);
 
     // Crisp outline + warm practical anime subtitle fill
     ctx.lineWidth = Math.max(3, fontSize * 0.16);

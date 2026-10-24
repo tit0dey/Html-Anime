@@ -3,9 +3,12 @@ import { AlertCircle, CheckCircle2 } from 'lucide-react';
 import { DirectorFormPanel } from './components/DirectorFormPanel';
 import { HeaderBar } from './components/HeaderBar';
 import { StageAndVaultPanel } from './components/StageAndVaultPanel';
+import { COLOR_SCRIPTS, getDimensions } from './engine/colorScripts';
 import {
+  buildShotSheetMarkdown,
   compileAnimeFilmProject,
   fetchOptionalTopicContext,
+  inferColorScriptFromPrompt,
 } from './engine/directorEngine';
 import { RenderProgressInfo, renderFilmToMp4 } from './engine/mp4Exporter';
 import {
@@ -28,7 +31,7 @@ const INITIAL_CONFIG: StudioFormConfig = {
   quality: '720p',
   minutes: 0,
   seconds: 12,
-  scriptId: 'indigo',
+  scriptId: 'auto',
   world: 'auto',
   weather: 'auto',
   showSubtitles: true,
@@ -61,20 +64,80 @@ export const App: React.FC = () => {
   } | null>(null);
 
   const abortRef = useRef<AbortController | null>(null);
-  const isFirstMount = useRef(true);
+  const prevStructuralRef = useRef<string>(
+    JSON.stringify({
+      prompt: INITIAL_CONFIG.prompt,
+      dialogue: INITIAL_CONFIG.dialogue,
+      minutes: INITIAL_CONFIG.minutes,
+      seconds: INITIAL_CONFIG.seconds,
+      world: INITIAL_CONFIG.world,
+      weather: INITIAL_CONFIG.weather,
+    })
+  );
+  const vaultUrlsRef = useRef<string[]>([]);
 
   useEffect(() => {
-    if (isFirstMount.current) {
-      isFirstMount.current = false;
-      return;
-    }
+    return () => {
+      for (const u of vaultUrlsRef.current) {
+        URL.revokeObjectURL(u);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    const nextStructural = JSON.stringify({
+      prompt: config.prompt,
+      dialogue: config.dialogue,
+      minutes: config.minutes,
+      seconds: config.seconds,
+      world: config.world,
+      weather: config.weather,
+    });
+
+    const structuralChanged = nextStructural !== prevStructuralRef.current;
+
     const timer = setTimeout(() => {
-      const nextProj = compileAnimeFilmProject(config);
-      setProject(nextProj);
-      setHasCustomShotEdits(false);
-    }, 140);
+      if (!structuralChanged && hasCustomShotEdits) {
+        // Non-destructive update: keep custom shot edits while applying orientation/quality/palette/toggles!
+        const { width, height } = getDimensions(config.aspect, config.quality);
+        const resolvedId = inferColorScriptFromPrompt(
+          config.prompt,
+          config.scriptId
+        );
+        const colorScript = COLOR_SCRIPTS[resolvedId] || COLOR_SCRIPTS.indigo;
+
+        setProject((prev) => ({
+          ...prev,
+          aspect: config.aspect,
+          quality: config.quality,
+          width,
+          height,
+          colorScript,
+          includeScore: config.includeScore,
+          includeVoiceover: config.includeVoiceover,
+          showSubtitles: config.showSubtitles,
+          letterbox: config.letterbox,
+          shotSheetMarkdown: buildShotSheetMarkdown({
+            cleanPrompt: prev.rawPrompt,
+            totalSeconds: prev.totalSeconds,
+            totalFrames: prev.totalFrames,
+            width,
+            height,
+            aspect: config.aspect,
+            colorScript,
+            shots: prev.shots,
+          }),
+        }));
+      } else {
+        prevStructuralRef.current = nextStructural;
+        const nextProj = compileAnimeFilmProject(config);
+        setProject(nextProj);
+        setHasCustomShotEdits(false);
+      }
+    }, 120);
+
     return () => clearTimeout(timer);
-  }, [config]);
+  }, [config, hasCustomShotEdits]);
 
   const handleCompilePreview = async () => {
     setIsCompiling(true);
@@ -95,6 +158,16 @@ export const App: React.FC = () => {
     setProject((prev) => ({
       ...prev,
       shots,
+      shotSheetMarkdown: buildShotSheetMarkdown({
+        cleanPrompt: prev.rawPrompt,
+        totalSeconds: prev.totalSeconds,
+        totalFrames: prev.totalFrames,
+        width: prev.width,
+        height: prev.height,
+        aspect: prev.aspect,
+        colorScript: prev.colorScript,
+        shots,
+      }),
     }));
   };
 
@@ -126,6 +199,8 @@ export const App: React.FC = () => {
         signal: abortController.signal,
         onProgress: (info) => setRenderProgress(info),
       });
+
+      vaultUrlsRef.current.push(result.url);
 
       const vaultItem: RenderedVideoVaultItem = {
         id: `mp4_${Date.now().toString(36)}`,
@@ -183,6 +258,9 @@ export const App: React.FC = () => {
       const target = prev.find((v) => v.id === id);
       if (target) {
         URL.revokeObjectURL(target.videoUrl);
+        vaultUrlsRef.current = vaultUrlsRef.current.filter(
+          (u) => u !== target.videoUrl
+        );
       }
       return prev.filter((v) => v.id !== id);
     });

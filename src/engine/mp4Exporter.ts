@@ -1,7 +1,8 @@
 import { ArrayBufferTarget, Muxer } from 'mp4-muxer';
 import { CompiledFilmProject } from '../types/film';
 import {
-  prepareOptionalVoiceoverPcm,
+  VoiceCue,
+  prepareOptionalVoiceoverCues,
   renderCinemaAudioChunk,
 } from './audioScoreEngine';
 import { renderAnimeFilmFrame } from './celRenderer';
@@ -24,23 +25,37 @@ export interface RenderedMp4Output {
 
 const sleepMs = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-async function pickSupportedAvcCodec(
+interface SelectedVideoCodec {
+  webCodec: string;
+  muxerCodec: 'avc' | 'vp9';
+  label: string;
+}
+
+interface SelectedAudioCodec {
+  webCodec: string;
+  muxerCodec: 'aac' | 'opus';
+  sampleRate: number;
+  bitrate: number;
+  label: string;
+}
+
+async function pickSupportedVideoCodec(
   width: number,
   height: number,
   fps: number,
   bitrate: number
-): Promise<string | null> {
+): Promise<SelectedVideoCodec | null> {
   const VE = (window as any).VideoEncoder;
   if (!VE || typeof VE.isConfigSupported !== 'function') return null;
 
-  const candidates = [
-    'avc1.4d0028', // Main Profile Level 4.0 (Supports up to 1080p+)
-    'avc1.420028', // Baseline Profile Level 4.0 (Supports up to 1080p+)
+  const avcCandidates = [
+    'avc1.4d0028', // Main Profile Level 4.0 (720p & 1080p)
+    'avc1.420028', // Baseline Profile Level 4.0 (720p & 1080p)
     'avc1.640028', // High Profile Level 4.0
     'avc1.42001f', // Baseline Profile Level 3.1 (720p)
   ];
 
-  for (const codec of candidates) {
+  for (const codec of avcCandidates) {
     try {
       const check = await VE.isConfigSupported({
         codec,
@@ -49,41 +64,195 @@ async function pickSupportedAvcCodec(
         bitrate,
         framerate: fps,
       });
-      if (check?.supported) return codec;
-    } catch {
-      continue;
-    }
-  }
-  return null;
-}
-
-async function pickSupportedAacConfig(): Promise<{
-  sampleRate: number;
-  bitrate: number;
-} | null> {
-  const AE = (window as any).AudioEncoder;
-  if (!AE || typeof AE.isConfigSupported !== 'function') return null;
-
-  for (const sr of [48000, 44100]) {
-    try {
-      const check = await AE.isConfigSupported({
-        codec: 'mp4a.40.2',
-        sampleRate: sr,
-        numberOfChannels: 1,
-        bitrate: 96_000,
-      });
       if (check?.supported) {
-        return { sampleRate: sr, bitrate: 96_000 };
+        return { webCodec: codec, muxerCodec: 'avc', label: 'H.264' };
       }
     } catch {
       continue;
     }
   }
+
+  // Fallback for open-source Linux Chromium builds without proprietary H.264
+  try {
+    const vp9Check = await VE.isConfigSupported({
+      codec: 'vp09.00.10.08',
+      width,
+      height,
+      bitrate,
+      framerate: fps,
+    });
+    if (vp9Check?.supported) {
+      return { webCodec: 'vp09.00.10.08', muxerCodec: 'vp9', label: 'VP9' };
+    }
+  } catch {
+    // Ignore
+  }
+
+  return null;
+}
+
+async function getSupportedAudioCandidates(): Promise<SelectedAudioCodec[]> {
+  const AE = (window as any).AudioEncoder;
+  if (!AE || typeof AE.isConfigSupported !== 'function') return [];
+
+  const candidates: SelectedAudioCodec[] = [
+    {
+      webCodec: 'mp4a.40.2',
+      muxerCodec: 'aac',
+      sampleRate: 48000,
+      bitrate: 96_000,
+      label: 'AAC',
+    },
+    {
+      webCodec: 'mp4a.40.2',
+      muxerCodec: 'aac',
+      sampleRate: 44100,
+      bitrate: 96_000,
+      label: 'AAC',
+    },
+    {
+      webCodec: 'opus',
+      muxerCodec: 'opus',
+      sampleRate: 48000,
+      bitrate: 96_000,
+      label: 'Opus',
+    },
+  ];
+
+  const supported: SelectedAudioCodec[] = [];
+  for (const c of candidates) {
+    try {
+      const check = await AE.isConfigSupported({
+        codec: c.webCodec,
+        sampleRate: c.sampleRate,
+        numberOfChannels: 1,
+        bitrate: c.bitrate,
+      });
+      if (check?.supported) supported.push(c);
+    } catch {
+      continue;
+    }
+  }
+  return supported;
+}
+
+async function encodeAudioTrackSafely(params: {
+  project: CompiledFilmProject;
+  audioCandidates: SelectedAudioCodec[];
+  voiceCuesByRate: Map<number, VoiceCue[]>;
+  signal?: AbortSignal;
+}): Promise<{
+  codec: SelectedAudioCodec;
+  chunks: Array<{ chunk: any; meta: any }>;
+} | null> {
+  const { project, audioCandidates, voiceCuesByRate, signal } = params;
+  const AE = (window as any).AudioEncoder;
+  const AD = (window as any).AudioData;
+  if (!AE || !AD) return null;
+
+  for (const candidate of audioCandidates) {
+    const collected: Array<{ chunk: any; meta: any }> = [];
+    let failed = false;
+
+    const audioEncoder = new AE({
+      output: (chunk: any, meta: any) => {
+        // Clone chunk bytes into a compact Uint8Array in case browser recycles internal buffer
+        const buf = new Uint8Array(chunk.byteLength);
+        chunk.copyTo(buf);
+        const clonedChunk = new (window as any).EncodedAudioChunk({
+          type: chunk.type,
+          timestamp: chunk.timestamp,
+          duration: chunk.duration ?? undefined,
+          data: buf,
+        });
+        collected.push({ chunk: clonedChunk, meta });
+      },
+      error: () => {
+        failed = true;
+      },
+    });
+
+    try {
+      audioEncoder.configure({
+        codec: candidate.webCodec,
+        sampleRate: candidate.sampleRate,
+        numberOfChannels: 1,
+        bitrate: candidate.bitrate,
+      });
+
+      let voiceCues = voiceCuesByRate.get(candidate.sampleRate);
+      if (!voiceCues) {
+        voiceCues = project.includeVoiceover
+          ? await prepareOptionalVoiceoverCues(project, candidate.sampleRate)
+          : [];
+        voiceCuesByRate.set(candidate.sampleRate, voiceCues);
+      }
+
+      const totalAudioSamples = Math.ceil(
+        project.totalSeconds * candidate.sampleRate
+      );
+      const chunkSize = candidate.sampleRate; // 1 second per chunk (<200KB RAM!)
+
+      for (
+        let startSample = 0;
+        startSample < totalAudioSamples && !failed;
+        startSample += chunkSize
+      ) {
+        if (signal?.aborted) {
+          audioEncoder.close();
+          throw new Error('Render cancelled.');
+        }
+
+        const len = Math.min(chunkSize, totalAudioSamples - startSample);
+        const pcm = renderCinemaAudioChunk(
+          project,
+          startSample,
+          len,
+          candidate.sampleRate,
+          voiceCues
+        );
+
+        const audioData = new AD({
+          format: 'f32',
+          sampleRate: candidate.sampleRate,
+          numberOfFrames: len,
+          numberOfChannels: 1,
+          timestamp: Math.round((startSample * 1_000_000) / candidate.sampleRate),
+          data: pcm,
+        });
+        audioEncoder.encode(audioData);
+        audioData.close();
+
+        while (audioEncoder.encodeQueueSize > 8 && !failed) {
+          await sleepMs(6);
+        }
+      }
+
+      if (!failed) {
+        await audioEncoder.flush();
+      }
+      audioEncoder.close();
+
+      if (!failed && collected.length > 0) {
+        return { codec: candidate, chunks: collected };
+      }
+    } catch (err) {
+      try {
+        audioEncoder.close();
+      } catch {
+        // Ignore
+      }
+      if (err instanceof Error && err.message === 'Render cancelled.') {
+        throw err;
+      }
+    }
+  }
+
   return null;
 }
 
 /**
- * Renders the entire CompiledFilmProject directly into a downloadable H.264 (+ AAC) .mp4 file
+ * Renders the entire CompiledFilmProject directly into a downloadable H.264 (+ AAC/Opus) .mp4 file
  * entirely on-device via streaming WebCodecs + mp4-muxer (0 MB uncompressed frame accumulation!).
  */
 export async function renderFilmToMp4(params: {
@@ -106,38 +275,50 @@ export async function renderFilmToMp4(params: {
     throw new Error('Could not initialize 2D rendering context.');
   }
 
-  const avcCodec = await pickSupportedAvcCodec(W, H, fps, videoBitrate);
+  const selectedVideo = await pickSupportedVideoCodec(W, H, fps, videoBitrate);
 
-  // Path A: Fast Hardware H.264 + AAC MP4 Streaming Pipeline (WebCodecs + mp4-muxer)
-  if (avcCodec && typeof (window as any).VideoFrame !== 'undefined') {
+  // Path A: Fast Hardware WebCodecs + mp4-muxer Streaming Pipeline
+  if (selectedVideo && typeof (window as any).VideoFrame !== 'undefined') {
     const wantAudio = project.includeScore || project.includeVoiceover;
-    const aacConfig = wantAudio ? await pickSupportedAacConfig() : null;
+    const audioCandidates = wantAudio ? await getSupportedAudioCandidates() : [];
+    const voiceCuesByRate = new Map<number, VoiceCue[]>();
 
-    let voicePcm: Float32Array | null = null;
-    if (aacConfig && project.includeVoiceover) {
+    if (wantAudio && audioCandidates.length > 0) {
       onProgress?.({
         pct: 2,
         currentFrame: 0,
         totalFrames,
-        statusText: 'Synthesizing narration voiceover...',
+        statusText: project.includeVoiceover
+          ? 'Synthesizing narration & cinema score...'
+          : 'Synthesizing procedural cinema score & SFX...',
         etaSec: Math.ceil(totalFrames / 60),
       });
-      voicePcm = await prepareOptionalVoiceoverPcm(project, aacConfig.sampleRate);
     }
+
+    const encodedAudio =
+      audioCandidates.length > 0
+        ? await encodeAudioTrackSafely({
+            project,
+            audioCandidates,
+            voiceCuesByRate,
+            signal,
+          })
+        : null;
 
     const target = new ArrayBufferTarget();
     const muxer = new Muxer({
       target,
       video: {
-        codec: 'avc',
+        codec: selectedVideo.muxerCodec,
         width: W,
         height: H,
+        frameRate: fps,
       },
-      ...(aacConfig
+      ...(encodedAudio
         ? {
             audio: {
-              codec: 'aac',
-              sampleRate: aacConfig.sampleRate,
+              codec: encodedAudio.codec.muxerCodec,
+              sampleRate: encodedAudio.codec.sampleRate,
               numberOfChannels: 1,
             },
           }
@@ -145,8 +326,14 @@ export async function renderFilmToMp4(params: {
       fastStart: 'in-memory',
     });
 
-    let encoderErr: Error | null = null;
+    if (encodedAudio) {
+      for (const item of encodedAudio.chunks) {
+        muxer.addAudioChunk(item.chunk, item.meta);
+      }
+      encodedAudio.chunks.length = 0; // Release audio chunk references immediately
+    }
 
+    let encoderErr: Error | null = null;
     const VE = (window as any).VideoEncoder;
     const videoEncoder = new VE({
       output: (chunk: any, meta: any) => {
@@ -158,81 +345,13 @@ export async function renderFilmToMp4(params: {
     });
 
     videoEncoder.configure({
-      codec: avcCodec,
+      codec: selectedVideo.webCodec,
       width: W,
       height: H,
       bitrate: videoBitrate,
       framerate: fps,
     });
 
-    // Encode streaming audio track in 1-second chunks first (uses <200KB RAM!)
-    if (aacConfig && typeof (window as any).AudioData !== 'undefined') {
-      const AE = (window as any).AudioEncoder;
-      let audioFailed = false;
-      const audioEncoder = new AE({
-        output: (chunk: any, meta: any) => {
-          muxer.addAudioChunk(chunk, meta);
-        },
-        error: () => {
-          audioFailed = true;
-        },
-      });
-
-      try {
-        audioEncoder.configure({
-          codec: 'mp4a.40.2',
-          sampleRate: aacConfig.sampleRate,
-          numberOfChannels: 1,
-          bitrate: aacConfig.bitrate,
-        });
-
-        const totalAudioSamples = Math.ceil(project.totalSeconds * aacConfig.sampleRate);
-        const chunkSize = aacConfig.sampleRate; // 1 second per chunk
-        for (
-          let startSample = 0;
-          startSample < totalAudioSamples && !audioFailed;
-          startSample += chunkSize
-        ) {
-          if (signal?.aborted) {
-            videoEncoder.close();
-            audioEncoder.close();
-            throw new Error('Render cancelled.');
-          }
-          const len = Math.min(chunkSize, totalAudioSamples - startSample);
-          const pcm = renderCinemaAudioChunk(
-            project,
-            startSample,
-            len,
-            aacConfig.sampleRate,
-            voicePcm
-          );
-          const audioData = new (window as any).AudioData({
-            format: 'f32',
-            sampleRate: aacConfig.sampleRate,
-            numberOfFrames: len,
-            numberOfChannels: 1,
-            timestamp: Math.round((startSample * 1_000_000) / aacConfig.sampleRate),
-            data: pcm,
-          });
-          audioEncoder.encode(audioData);
-          audioData.close();
-
-          while (audioEncoder.encodeQueueSize > 8) {
-            await sleepMs(6);
-          }
-        }
-        await audioEncoder.flush();
-        audioEncoder.close();
-      } catch {
-        try {
-          audioEncoder.close();
-        } catch {
-          // Ignore
-        }
-      }
-    }
-
-    // Stream every 24fps anime cel frame directly into Hardware H.264 encoder!
     const tStart = performance.now();
     const VF = (window as any).VideoFrame;
 
@@ -255,7 +374,6 @@ export async function renderFilmToMp4(params: {
       videoEncoder.encode(vf, { keyFrame: i % (fps * 2) === 0 });
       vf.close();
 
-      // Hardware backpressure & thermal guard so phone never lags or heats up
       while (videoEncoder.encodeQueueSize > 8) {
         await sleepMs(8);
       }
@@ -264,13 +382,13 @@ export async function renderFilmToMp4(params: {
         const elapsedSec = (performance.now() - tStart) / 1000;
         const fpsRate = Math.max(1, (i + 1) / Math.max(0.05, elapsedSec));
         const etaSec = Math.max(0, Math.ceil((totalFrames - 1 - i) / fpsRate));
-        const pct = Math.min(98, Math.round(((i + 1) / totalFrames) * 94) + 4);
+        const pct = Math.min(98, Math.round(((i + 1) / totalFrames) * 93) + 5);
 
         onProgress?.({
           pct,
           currentFrame: i + 1,
           totalFrames,
-          statusText: `Encoding H.264 Cel Frame ${i + 1} / ${totalFrames} (${Math.round(
+          statusText: `Encoding ${selectedVideo.label} Cel Frame ${i + 1} / ${totalFrames} (${Math.round(
             fpsRate
           )} fps)...`,
           etaSec,
@@ -289,6 +407,8 @@ export async function renderFilmToMp4(params: {
 
     await videoEncoder.flush();
     videoEncoder.close();
+    if (encoderErr) throw encoderErr;
+
     muxer.finalize();
 
     const mp4Buffer = target.buffer;
@@ -298,18 +418,52 @@ export async function renderFilmToMp4(params: {
       url: URL.createObjectURL(blob),
       mimeType: 'video/mp4',
       sizeBytes: blob.size,
-      engineLabel: aacConfig
-        ? `Hardware H.264 + AAC MP4 (${W}×${H} · 24fps)`
-        : `Hardware H.264 MP4 (${W}×${H} · 24fps)`,
+      engineLabel: encodedAudio
+        ? `Hardware ${selectedVideo.label} + ${encodedAudio.codec.label} MP4 (${W}×${H} · 24fps)`
+        : `Hardware ${selectedVideo.label} MP4 (${W}×${H} · 24fps)`,
     };
   }
 
-  // Path B: Universal MediaRecorder Fallback for legacy browsers without WebCodecs
-  const stream = canvas.captureStream(fps);
+  // Path B: Universal MediaRecorder Fallback (with WebAudio Soundtrack + Drift-Free Clock)
+  const combinedStream = canvas.captureStream(fps);
+  let fallbackAudioCtx: AudioContext | null = null;
+
+  if (project.includeScore || project.includeVoiceover) {
+    const AudioCtx =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    if (AudioCtx) {
+      try {
+        fallbackAudioCtx = new AudioCtx();
+        const sr = 22050;
+        const voiceCues = project.includeVoiceover
+          ? await prepareOptionalVoiceoverCues(project, sr)
+          : [];
+        const totalSamples = Math.max(1, Math.ceil(project.totalSeconds * sr));
+        // Cap single buffer in fallback mode to 180s max
+        const cappedSamples = Math.min(totalSamples, sr * 180);
+        const pcm = renderCinemaAudioChunk(project, 0, cappedSamples, sr, voiceCues);
+        const buf = fallbackAudioCtx.createBuffer(1, cappedSamples, sr);
+        buf.getChannelData(0).set(pcm);
+        const dest = fallbackAudioCtx.createMediaStreamDestination();
+        const src = fallbackAudioCtx.createBufferSource();
+        src.buffer = buf;
+        src.connect(dest);
+        src.start(0);
+        for (const track of dest.stream.getAudioTracks()) {
+          combinedStream.addTrack(track);
+        }
+      } catch {
+        // Ignore fallback audio errors
+      }
+    }
+  }
+
   const mimeCandidates = [
     'video/mp4;codecs=avc1',
     'video/mp4',
-    'video/webm;codecs=vp9',
+    'video/webm;codecs=vp9,opus',
+    'video/webm;codecs=vp8,opus',
     'video/webm',
   ];
   const chosenMime =
@@ -318,8 +472,11 @@ export async function renderFilmToMp4(params: {
     ) || '';
 
   const recorder = chosenMime
-    ? new MediaRecorder(stream, { mimeType: chosenMime, videoBitsPerSecond: videoBitrate })
-    : new MediaRecorder(stream);
+    ? new MediaRecorder(combinedStream, {
+        mimeType: chosenMime,
+        videoBitsPerSecond: videoBitrate,
+      })
+    : new MediaRecorder(combinedStream);
 
   const chunks: BlobPart[] = [];
   recorder.ondataavailable = (ev) => {
@@ -334,34 +491,43 @@ export async function renderFilmToMp4(params: {
 
   recorder.start(250);
   const frameIntervalMs = 1000 / fps;
+  const startWall = performance.now();
 
-  for (let i = 0; i < totalFrames; i++) {
-    if (signal?.aborted) {
-      recorder.stop();
-      throw new Error('Render cancelled.');
+  try {
+    for (let i = 0; i < totalFrames; i++) {
+      if (signal?.aborted) {
+        recorder.stop();
+        throw new Error('Render cancelled.');
+      }
+      renderAnimeFilmFrame(ctx, project, i);
+      if (i % 6 === 0 || i === totalFrames - 1) {
+        onProgress?.({
+          pct: Math.round(((i + 1) / totalFrames) * 99),
+          currentFrame: i + 1,
+          totalFrames,
+          statusText: `Capturing Frame ${i + 1} / ${totalFrames}...`,
+          etaSec: Math.ceil((totalFrames - 1 - i) / fps),
+        });
+      }
+      const targetTime = startWall + (i + 1) * frameIntervalMs;
+      const wait = Math.max(0, targetTime - performance.now());
+      if (wait > 1) {
+        await sleepMs(wait);
+      }
     }
-    const t0 = performance.now();
-    renderAnimeFilmFrame(ctx, project, i);
-    if (i % 6 === 0 || i === totalFrames - 1) {
-      onProgress?.({
-        pct: Math.round(((i + 1) / totalFrames) * 99),
-        currentFrame: i + 1,
-        totalFrames,
-        statusText: `Capturing Frame ${i + 1} / ${totalFrames}...`,
-        etaSec: Math.ceil((totalFrames - 1 - i) / fps),
-      });
+
+    recorder.stop();
+    const finalBlob = await donePromise;
+    return {
+      blob: finalBlob,
+      url: URL.createObjectURL(finalBlob),
+      mimeType: finalBlob.type || 'video/mp4',
+      sizeBytes: finalBlob.size,
+      engineLabel: `Stream Capture (${W}×${H} · 24fps)`,
+    };
+  } finally {
+    if (fallbackAudioCtx) {
+      await fallbackAudioCtx.close().catch(() => {});
     }
-    const wait = Math.max(0, frameIntervalMs - (performance.now() - t0));
-    await sleepMs(wait);
   }
-
-  recorder.stop();
-  const finalBlob = await donePromise;
-  return {
-    blob: finalBlob,
-    url: URL.createObjectURL(finalBlob),
-    mimeType: finalBlob.type || 'video/mp4',
-    sizeBytes: finalBlob.size,
-    engineLabel: `Stream Capture (${W}×${H} · 24fps)`,
-  };
 }

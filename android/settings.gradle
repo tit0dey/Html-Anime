@@ -1,2 +1,2 @@
-rootProject.name = "OpenBrain"
+rootProject.name = "HTMLAnimeStudio"
 include(":app")
