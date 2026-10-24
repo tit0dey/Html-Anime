@@ -8,6 +8,7 @@ import android.content.ContentValues;
 import android.content.Context;
 import android.content.Intent;
 import android.graphics.Color;
+import android.media.MediaScannerConnection;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -22,7 +23,6 @@ import android.view.ViewGroup;
 import android.view.Window;
 import android.webkit.DownloadListener;
 import android.webkit.JavascriptInterface;
-import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
@@ -49,16 +49,33 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class MainActivity extends Activity {
 
     private static final String VIRTUAL_HOST = "htmlanime.app";
+
+    private static class PendingDownload {
+        final String safeName;
+        final OutputStream out;
+        final Uri mediaUri;
+        final File legacyFile;
+
+        PendingDownload(String safeName, OutputStream out, Uri mediaUri, File legacyFile) {
+            this.safeName = safeName;
+            this.out = out;
+            this.mediaUri = mediaUri;
+            this.legacyFile = legacyFile;
+        }
+    }
 
     private WebView webView;
     private TextToSpeech nativeTts;
     private boolean ttsReady = false;
     private final ExecutorService httpPool = Executors.newCachedThreadPool();
     private final ConcurrentHashMap<String, File> pendingTtsFiles = new ConcurrentHashMap<String, File>();
+    private final ConcurrentHashMap<String, PendingDownload> activeDownloads = new ConcurrentHashMap<String, PendingDownload>();
+    private final AtomicInteger downloadSeq = new AtomicInteger(1);
 
     private void applyDarkCinemaBars() {
         Window window = getWindow();
@@ -285,11 +302,9 @@ public class MainActivity extends Activity {
         ));
         setContentView(root);
 
-        // Serve from HTTPS virtual origin so WebCodecs VideoEncoder/AudioEncoder are 100% enabled
         webView.loadUrl("https://" + VIRTUAL_HOST + "/index.html");
     }
 
-    // Zero-Phone-Pressure Guard: 0% CPU & 0% battery drain in background
     @Override
     protected void onPause() {
         if (webView != null) {
@@ -328,6 +343,13 @@ public class MainActivity extends Activity {
     @Override
     protected void onDestroy() {
         httpPool.shutdownNow();
+        for (PendingDownload pd : activeDownloads.values()) {
+            try {
+                pd.out.close();
+            } catch (Exception ignored) {
+            }
+        }
+        activeDownloads.clear();
         if (nativeTts != null) {
             nativeTts.stop();
             nativeTts.shutdown();
@@ -532,28 +554,30 @@ public class MainActivity extends Activity {
         }
 
         @JavascriptInterface
-        public String saveBase64ToDownloads(String base64Data, final String fileName, String mimeType) {
+        public String beginDownloadFile(String fileName, String mimeType) {
             try {
-                byte[] bytes = Base64.decode(base64Data, Base64.DEFAULT);
                 String safeName = (fileName == null || fileName.trim().isEmpty())
                         ? ("HTML_Anime_" + System.currentTimeMillis() + ".mp4")
                         : fileName.replaceAll("[^a-zA-Z0-9._-]", "_");
+                String safeMime = (mimeType != null && !mimeType.isEmpty()) ? mimeType : "video/mp4";
+                String transferId = "dl_" + downloadSeq.getAndIncrement();
 
                 if (Build.VERSION.SDK_INT >= 29) {
                     ContentValues values = new ContentValues();
                     values.put(MediaStore.Downloads.DISPLAY_NAME, safeName);
-                    values.put(MediaStore.Downloads.MIME_TYPE, mimeType != null ? mimeType : "video/mp4");
+                    values.put(MediaStore.Downloads.MIME_TYPE, safeMime);
                     values.put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/HTMLAnimeStudio");
+                    values.put(MediaStore.Downloads.IS_PENDING, 1);
                     ContentResolver resolver = getContentResolver();
                     Uri uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
-                    if (uri != null) {
-                        OutputStream os = resolver.openOutputStream(uri);
-                        if (os != null) {
-                            os.write(bytes);
-                            os.flush();
-                            os.close();
-                        }
+                    if (uri == null) {
+                        return "ERROR: MediaStore insert returned null";
                     }
+                    OutputStream os = resolver.openOutputStream(uri);
+                    if (os == null) {
+                        return "ERROR: Could not open MediaStore stream";
+                    }
+                    activeDownloads.put(transferId, new PendingDownload(safeName, os, uri, null));
                 } else {
                     File dir = new File(
                             Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
@@ -564,17 +588,72 @@ public class MainActivity extends Activity {
                     }
                     File outFile = new File(dir, safeName);
                     FileOutputStream fos = new FileOutputStream(outFile);
-                    fos.write(bytes);
-                    fos.flush();
-                    fos.close();
+                    activeDownloads.put(transferId, new PendingDownload(safeName, fos, null, outFile));
                 }
+                return transferId;
+            } catch (Exception e) {
+                return "ERROR: " + e.getMessage();
+            }
+        }
 
-                showToast("Saved to Downloads/HTMLAnimeStudio/" + safeName);
+        @JavascriptInterface
+        public String appendDownloadChunk(String transferId, String base64Chunk) {
+            PendingDownload pd = activeDownloads.get(transferId);
+            if (pd == null) return "ERROR: Unknown transferId";
+            try {
+                byte[] chunk = Base64.decode(base64Chunk, Base64.DEFAULT);
+                pd.out.write(chunk);
                 return "OK";
-            } catch (final Exception e) {
+            } catch (Exception e) {
+                activeDownloads.remove(transferId);
+                try {
+                    pd.out.close();
+                } catch (Exception ignored) {
+                }
+                return "ERROR: " + e.getMessage();
+            }
+        }
+
+        @JavascriptInterface
+        public String finishDownloadFile(String transferId) {
+            PendingDownload pd = activeDownloads.remove(transferId);
+            if (pd == null) return "ERROR: Unknown transferId";
+            try {
+                pd.out.flush();
+                pd.out.close();
+                if (Build.VERSION.SDK_INT >= 29 && pd.mediaUri != null) {
+                    ContentValues done = new ContentValues();
+                    done.put(MediaStore.Downloads.IS_PENDING, 0);
+                    getContentResolver().update(pd.mediaUri, done, null, null);
+                } else if (pd.legacyFile != null) {
+                    MediaScannerConnection.scanFile(
+                            MainActivity.this,
+                            new String[]{pd.legacyFile.getAbsolutePath()},
+                            null,
+                            null
+                    );
+                }
+                showToast("Saved to Downloads/HTMLAnimeStudio/" + pd.safeName);
+                return "OK";
+            } catch (Exception e) {
                 showToast("Save error: " + e.getMessage());
                 return "ERROR: " + e.getMessage();
             }
+        }
+
+        @JavascriptInterface
+        public String saveBase64ToDownloads(String base64Data, final String fileName, String mimeType) {
+            String tid = beginDownloadFile(fileName, mimeType);
+            if (tid.startsWith("ERROR:")) {
+                showToast("Save error: " + tid);
+                return tid;
+            }
+            String step = appendDownloadChunk(tid, base64Data);
+            if (step.startsWith("ERROR:")) {
+                showToast("Save error: " + step);
+                return step;
+            }
+            return finishDownloadFile(tid);
         }
     }
 }

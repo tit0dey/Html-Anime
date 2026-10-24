@@ -49,7 +49,7 @@ if (jsFile) {
 }
 
 fs.writeFileSync(path.join(assetsPublicDir, 'index.html'), html, 'utf8');
-for (const staticName of ['logo.png', 'icon.svg', 'manifest.json']) {
+for (const staticName of ['logo.png', 'manifest.json']) {
   const srcStatic = path.join(REPO_ROOT, 'public', staticName);
   if (fs.existsSync(srcStatic)) {
     fs.copyFileSync(srcStatic, path.join(assetsPublicDir, staticName));

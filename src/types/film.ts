@@ -12,6 +12,8 @@ export type ColorScriptId =
   | 'sakura'
   | 'emerald';
 
+export type ColorScriptChoice = ColorScriptId | 'auto';
+
 export interface ColorPalette {
   sky: string;
   ink: string;
@@ -104,7 +106,7 @@ export interface StudioFormConfig {
   seconds: number;
   aspect: AspectRatio;
   quality: QualityPreset;
-  scriptId: ColorScriptId;
+  scriptId: ColorScriptChoice;
   world: WorldArchetype;
   weather: WeatherType;
   includeScore: boolean;

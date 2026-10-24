@@ -2,15 +2,15 @@
   "name": "HTML-Anime Studio",
   "short_name": "HTML-Anime",
   "description": "Turn any topic, scene, or full story into a rendered MP4 anime film — custom duration, 16:9 or 9:16, 100% free & unlimited.",
-  "start_url": "/",
+  "start_url": "./",
   "display": "standalone",
-  "background_color": "#0B0E17",
-  "theme_color": "#0B0E17",
+  "background_color": "#060913",
+  "theme_color": "#060913",
   "icons": [
     {
-      "src": "/icon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
+      "src": "./logo.png",
+      "sizes": "192x192 512x512",
+      "type": "image/png",
       "purpose": "any maskable"
     }
   ]

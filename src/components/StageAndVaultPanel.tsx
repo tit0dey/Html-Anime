@@ -16,6 +16,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import { getShotAtFrame, renderAnimeFilmFrame } from '../engine/celRenderer';
+import { SHOT_DIRECTIONS, SHOT_LABELS } from '../engine/directorEngine';
 import { LiveStageAudioPlayer } from '../engine/liveAudioPreview';
 import { RenderProgressInfo } from '../engine/mp4Exporter';
 import { downloadBlobCrossPlatform } from '../engine/nativeBridge';
@@ -105,7 +106,8 @@ export const StageAndVaultPanel: React.FC<StageAndVaultPanelProps> = ({
     }
     const ctx = canvas.getContext('2d', { alpha: false });
     if (!ctx) return;
-    renderAnimeFilmFrame(ctx, project, currentFrame);
+    const safeFrame = Math.max(0, Math.min(project.totalFrames - 1, currentFrame));
+    renderAnimeFilmFrame(ctx, project, safeFrame);
   }, [project, currentFrame]);
 
   useEffect(() => {
@@ -195,14 +197,8 @@ export const StageAndVaultPanel: React.FC<StageAndVaultPanelProps> = ({
 
   const activeShot = getShotAtFrame(project, currentFrame);
 
-  const updateShotField = <K extends keyof FilmShot>(
-    shotId: string,
-    field: K,
-    value: FilmShot[K]
-  ) => {
-    const updated = project.shots.map((s) =>
-      s.id === shotId ? { ...s, [field]: value } : s
-    );
+  const updateShot = (shotId: string, updater: (s: FilmShot) => FilmShot) => {
+    const updated = project.shots.map((s) => (s.id === shotId ? updater(s) : s));
     onUpdateProjectShots(updated);
   };
 
@@ -223,7 +219,8 @@ export const StageAndVaultPanel: React.FC<StageAndVaultPanelProps> = ({
               {project.width}×{project.height} · 24fps
             </span>
             <span className="hidden rounded-md border border-indigo-500/30 bg-indigo-500/10 px-2 py-0.5 text-[10px] font-semibold text-indigo-300 sm:inline-block">
-              Shot {activeShot.index + 1}/{project.shots.length}
+              Shot {activeShot.index + 1}/{project.shots.length} ·{' '}
+              {project.colorScript.name}
               {activeShot.sakuga ? ' · SAKUGA' : ''}
             </span>
           </div>
@@ -315,7 +312,7 @@ export const StageAndVaultPanel: React.FC<StageAndVaultPanelProps> = ({
                 type="range"
                 min={0}
                 max={Math.max(1, project.totalFrames - 1)}
-                value={currentFrame}
+                value={Math.min(currentFrame, Math.max(0, project.totalFrames - 1))}
                 onChange={(e) => handleScrub(Number(e.target.value))}
                 className="w-full cursor-pointer"
               />
@@ -345,7 +342,8 @@ export const StageAndVaultPanel: React.FC<StageAndVaultPanelProps> = ({
                       : 'border-slate-800 bg-slate-900/80 text-slate-400 hover:border-slate-700 hover:text-slate-200'
                   }`}
                 >
-                  S{s.index + 1} ({s.durationSec}s){s.sakuga ? ' · Sakuga' : ''}
+                  S{s.index + 1} ({s.durationSec}s)
+                  {s.sakuga || s.kind === 'sakuga' ? ' · Sakuga' : ''}
                 </button>
               );
             })}
@@ -483,6 +481,7 @@ export const StageAndVaultPanel: React.FC<StageAndVaultPanelProps> = ({
             {project.shots.map((shot) => {
               const isCurr = activeShot.id === shot.id;
               const frameCount = shot.endFrame - shot.startFrame;
+              const isSakuga = shot.sakuga || shot.kind === 'sakuga';
               return (
                 <div
                   key={shot.id}
@@ -508,16 +507,30 @@ export const StageAndVaultPanel: React.FC<StageAndVaultPanelProps> = ({
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        updateShotField(shot.id, 'sakuga', !shot.sakuga);
+                        updateShot(shot.id, (prev) => {
+                          const nextSakuga = !(prev.sakuga || prev.kind === 'sakuga');
+                          const nextKind: ShotKind = nextSakuga
+                            ? 'sakuga'
+                            : prev.kind === 'sakuga'
+                            ? 'approach'
+                            : prev.kind;
+                          return {
+                            ...prev,
+                            sakuga: nextSakuga,
+                            kind: nextKind,
+                            label: SHOT_LABELS[nextKind],
+                            directionNote: SHOT_DIRECTIONS[nextKind],
+                          };
+                        });
                       }}
                       className={`inline-flex items-center gap-1 rounded-lg border px-2 py-0.5 text-[11px] font-semibold transition ${
-                        shot.sakuga
+                        isSakuga
                           ? 'border-amber-500/50 bg-amber-500/20 text-amber-200'
                           : 'border-slate-800 bg-slate-900 text-slate-400 hover:text-slate-200'
                       }`}
                     >
                       <Flame className="h-3 w-3" />
-                      <span>{shot.sakuga ? 'Sakuga Climax ON' : 'Set Sakuga'}</span>
+                      <span>{isSakuga ? 'Sakuga Climax ON' : 'Set Sakuga'}</span>
                     </button>
                   </div>
 
@@ -526,7 +539,10 @@ export const StageAndVaultPanel: React.FC<StageAndVaultPanelProps> = ({
                     value={shot.caption}
                     onClick={(e) => e.stopPropagation()}
                     onChange={(e) =>
-                      updateShotField(shot.id, 'caption', e.target.value)
+                      updateShot(shot.id, (prev) => ({
+                        ...prev,
+                        caption: e.target.value,
+                      }))
                     }
                     placeholder="Shot subtitle or narration..."
                     className="mb-2 w-full rounded-lg border border-slate-800 bg-slate-900/90 px-2.5 py-1.5 text-xs text-slate-100 outline-none focus:border-indigo-500"
@@ -538,13 +554,16 @@ export const StageAndVaultPanel: React.FC<StageAndVaultPanelProps> = ({
                   >
                     <select
                       value={shot.kind}
-                      onChange={(e) =>
-                        updateShotField(
-                          shot.id,
-                          'kind',
-                          e.target.value as ShotKind
-                        )
-                      }
+                      onChange={(e) => {
+                        const nextKind = e.target.value as ShotKind;
+                        updateShot(shot.id, (prev) => ({
+                          ...prev,
+                          kind: nextKind,
+                          sakuga: nextKind === 'sakuga',
+                          label: SHOT_LABELS[nextKind],
+                          directionNote: SHOT_DIRECTIONS[nextKind],
+                        }));
+                      }}
                       className="rounded-lg border border-slate-800 bg-slate-900 px-2 py-1 text-[11px] text-slate-300 outline-none"
                     >
                       <option value="establish">Wide Establish</option>
@@ -560,11 +579,10 @@ export const StageAndVaultPanel: React.FC<StageAndVaultPanelProps> = ({
                     <select
                       value={shot.world}
                       onChange={(e) =>
-                        updateShotField(
-                          shot.id,
-                          'world',
-                          e.target.value as ConcreteWorld
-                        )
+                        updateShot(shot.id, (prev) => ({
+                          ...prev,
+                          world: e.target.value as ConcreteWorld,
+                        }))
                       }
                       className="rounded-lg border border-slate-800 bg-slate-900 px-2 py-1 text-[11px] text-slate-300 outline-none"
                     >
@@ -578,11 +596,10 @@ export const StageAndVaultPanel: React.FC<StageAndVaultPanelProps> = ({
                     <select
                       value={shot.weather}
                       onChange={(e) =>
-                        updateShotField(
-                          shot.id,
-                          'weather',
-                          e.target.value as ConcreteWeather
-                        )
+                        updateShot(shot.id, (prev) => ({
+                          ...prev,
+                          weather: e.target.value as ConcreteWeather,
+                        }))
                       }
                       className="rounded-lg border border-slate-800 bg-slate-900 px-2 py-1 text-[11px] text-slate-300 outline-none"
                     >

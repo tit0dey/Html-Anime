@@ -1,15 +1,15 @@
 apply plugin: 'com.android.application'
 
 android {
-    namespace 'com.openbrain.ai'
+    namespace 'com.htmlanime.studio'
     compileSdk 34
 
     defaultConfig {
-        applicationId "com.openbrain.ai"
+        applicationId "com.htmlanime.studio"
         minSdk 24
         targetSdk 34
         versionCode 2
-        versionName "2.0.0"
+        versionName "1.0.1"
     }
 
     buildTypes {

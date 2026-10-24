@@ -13,6 +13,7 @@ import {
   Plus,
   RectangleHorizontal,
   RectangleVertical,
+  Sparkles,
   Square,
   Subtitles,
   Video,
@@ -21,6 +22,7 @@ import {
 import { COLOR_SCRIPTS, FPS } from '../engine/colorScripts';
 import {
   AspectRatio,
+  ColorScriptChoice,
   ColorScriptId,
   QualityPreset,
   StudioFormConfig,
@@ -44,7 +46,7 @@ const INSPIRATION_IDEAS: Array<{
   aspect: AspectRatio;
   min: number;
   sec: number;
-  scriptId: ColorScriptId;
+  scriptId: ColorScriptChoice;
 }> = [
   {
     label: 'Rainy Rooftop Samurai',
@@ -326,7 +328,8 @@ export const DirectorFormPanel: React.FC<DirectorFormPanelProps> = ({
                 value={config.minutes}
                 onChange={(e) => {
                   const v = Math.max(0, Math.min(10, Number(e.target.value) || 0));
-                  update('minutes', v);
+                  const nextSec = v === 0 && config.seconds < 4 ? 4 : config.seconds;
+                  onChange({ ...config, minutes: v, seconds: nextSec });
                 }}
                 className="w-16 bg-transparent text-center text-base font-bold text-white outline-none"
               />
@@ -409,7 +412,20 @@ export const DirectorFormPanel: React.FC<DirectorFormPanelProps> = ({
           <span>4. Closed 10-Hex Anime Color Script</span>
         </label>
 
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-2">
+        <div className="grid grid-cols-3 gap-2">
+          <button
+            type="button"
+            onClick={() => update('scriptId', 'auto')}
+            className={`flex items-center gap-2 rounded-xl border px-2.5 py-2 text-left text-xs font-semibold transition ${
+              config.scriptId === 'auto'
+                ? 'border-indigo-500 bg-indigo-500/15 text-white'
+                : 'border-slate-800 bg-slate-950/70 text-slate-400 hover:border-slate-700'
+            }`}
+          >
+            <Sparkles className="h-3.5 w-3.5 shrink-0 text-indigo-400" />
+            <span className="truncate">Auto Match</span>
+          </button>
+
           {(Object.keys(COLOR_SCRIPTS) as ColorScriptId[]).map((id) => {
             const cs = COLOR_SCRIPTS[id];
             const active = config.scriptId === id;

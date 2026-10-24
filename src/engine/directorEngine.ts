@@ -1,5 +1,6 @@
 import {
   CameraMove,
+  ColorScriptChoice,
   ColorScriptId,
   CompiledFilmProject,
   ConcreteWeather,
@@ -25,7 +26,7 @@ const STOP_WORDS = new Set(
   )
 );
 
-const SHOT_DIRECTIONS: Record<ShotKind, string> = {
+export const SHOT_DIRECTIONS: Record<ShotKind, string> = {
   establish:
     'Wide establishing frame. The world dominates the composition. Camera push 100% -> 106% (power1.inOut). Acting on twos.',
   approach:
@@ -35,7 +36,7 @@ const SHOT_DIRECTIONS: Record<ShotKind, string> = {
   close_eyes:
     'Tight anime close-up on the upper third. Sclera, iris rim, dual window catchlights, subtle brow tension & 2-frame blink.',
   sakuga:
-    'The Expensive Shot (8 unique drawings). Anticipation crouch -> high-speed smear frame -> 1-frame stark impact flash -> sweeping crescent slash & flying sparks on ones -> 12-frame landed hold.',
+    'The Expensive Shot (8 unique drawings). Anticipation crouch -> high-speed smear frame -> 2-frame stark impact flash -> sweeping crescent slash & flying sparks on ones -> 12-frame landed hold.',
   panoramic:
     'Sweeping horizon & celestial vista. Parallax cloud/architecture drift with practical light reflections.',
   aftermath:
@@ -44,7 +45,7 @@ const SHOT_DIRECTIONS: Record<ShotKind, string> = {
     'Closing portrait / horizon return. Verbatim dialogue or closing beat set cleanly in the lower third, ending with an 8-frame fade to ink.',
 };
 
-const SHOT_LABELS: Record<ShotKind, string> = {
+export const SHOT_LABELS: Record<ShotKind, string> = {
   establish: 'Establish',
   approach: 'Approach',
   turn: 'Anticipation Turn',
@@ -64,6 +65,36 @@ export function slugFromPrompt(prompt: string): string {
   return words.slice(0, 4).join('-') || 'html-anime-film';
 }
 
+export function inferColorScriptFromPrompt(
+  prompt: string,
+  requested: ColorScriptChoice
+): ColorScriptId {
+  if (requested !== 'auto') return requested;
+  const p = prompt.toLowerCase();
+  if (/\b(cyber|neon|hacker|matrix|ai|robot|2099|grid|synth)\b/.test(p)) {
+    return 'cyberpunk';
+  }
+  if (/\b(eclipse|blood|crimson|demon|war|fire|red|battle|revenge|রাগ|যুদ্ধ|রক্ত)\b/.test(p)) {
+    return 'eclipse';
+  }
+  if (/\b(sakura|blossom|cherry|petal|spring|pink|love|ভালোবাসা|বসন্ত|ফুল)\b/.test(p)) {
+    return 'sakura';
+  }
+  if (/\b(space|cosmos|comet|galaxy|black hole|orbit|twilight|star|মহাকাশ|তারা)\b/.test(p)) {
+    return 'shinkai';
+  }
+  if (/\b(lantern|festival|shrine|spirit|temple|gold|উৎসব|প্রদীপ)\b/.test(p)) {
+    return 'festival';
+  }
+  if (/\b(noon|sunlit|desert|paper|scroll|ancient|daylight|দুপুর|রোদ)\b/.test(p)) {
+    return 'noon';
+  }
+  if (/\b(emerald|forest|meadow|mountain|green|valley|nature|পাহাড়|সবুজ|বন)\b/.test(p)) {
+    return 'emerald';
+  }
+  return 'indigo';
+}
+
 export function inferWorldFromPrompt(
   prompt: string,
   requested: WorldArchetype
@@ -71,28 +102,28 @@ export function inferWorldFromPrompt(
   if (requested !== 'auto') return requested;
   const p = prompt.toLowerCase();
   if (
-    /\b(space|planet|star|galaxy|cosmos|black hole|nebula|universe|astronaut|orbit|moonfall|supernova|comet|quantum)\b/.test(
+    /\b(space|planet|star|galaxy|cosmos|black hole|nebula|universe|astronaut|orbit|moonfall|supernova|comet|quantum|মহাকাশ)\b/.test(
       p
     )
   ) {
     return 'cosmos_nebula';
   }
   if (
-    /\b(samurai|ronin|shrine|torii|temple|mountain|forest|bamboo|sword|katana|blade|warrior|myth|demon|ancient|dragon|ninja)\b/.test(
+    /\b(samurai|ronin|shrine|torii|temple|mountain|forest|bamboo|sword|katana|blade|warrior|myth|demon|ancient|dragon|ninja|পাহাড়|মন্দির)\b/.test(
       p
     )
   ) {
     return 'shrine_mountains';
   }
   if (
-    /\b(ocean|sea|water|wave|beach|train|sunset|horizon|island|ship|summer|memory|love|journey|coast)\b/.test(
+    /\b(ocean|sea|water|wave|beach|sunset|horizon|island|ship|summer|memory|coast|সমুদ্র|সাগর|নদী)\b/.test(
       p
     )
   ) {
     return 'ocean_horizon';
   }
   if (
-    /\b(ai|code|cyber|matrix|tech|robot|future|hacker|data|system|science|math|algorithm|engine|circuit)\b/.test(
+    /\b(ai|code|cyber|matrix|tech|robot|future|hacker|data|system|2099|algorithm|engine|circuit)\b/.test(
       p
     )
   ) {
@@ -109,11 +140,11 @@ export function inferWeatherFromPrompt(
 ): ConcreteWeather {
   if (requested !== 'auto') return requested;
   const p = prompt.toLowerCase();
-  if (/\b(rain|storm|thunder|wet|downpour|monsoon|drizzle)\b/.test(p)) return 'rain';
-  if (/\b(fire|flame|ember|ash|burn|battle|war|lava|eclipse|blood)\b/.test(p)) return 'embers';
-  if (/\b(sakura|petal|cherry|blossom|spring|flower|wind)\b/.test(p)) return 'petals';
-  if (/\b(snow|winter|ice|frost|blizzard|cold)\b/.test(p)) return 'snow';
-  if (/\b(star|space|galaxy|comet|cosmos|nebula|magic|cyber)\b/.test(p)) return 'stardust';
+  if (/\b(rain|storm|thunder|wet|downpour|monsoon|drizzle|বৃষ্টি|ঝড়)\b/.test(p)) return 'rain';
+  if (/\b(fire|flame|ember|ash|burn|battle|war|lava|eclipse|blood|আগুন)\b/.test(p)) return 'embers';
+  if (/\b(sakura|petal|cherry|blossom|spring|flower|ফুল)\b/.test(p)) return 'petals';
+  if (/\b(snow|winter|ice|frost|blizzard|cold|বরফ|শীত)\b/.test(p)) return 'snow';
+  if (/\b(star|space|galaxy|comet|cosmos|nebula|magic|cyber|তারা)\b/.test(p)) return 'stardust';
 
   if (scriptId === 'eclipse') return 'embers';
   if (scriptId === 'sakura') return 'petals';
@@ -125,14 +156,10 @@ export function inferWeatherFromPrompt(
 export function formatDurationClock(sec: number): string {
   const m = Math.floor(sec / 60);
   const s = sec - m * 60;
-  if (m === 0) return `${s.toFixed(1)}s`;
+  if (m === 0) return `${s % 1 === 0 ? s.toFixed(0) : s.toFixed(1)}s`;
   return `${m}m ${s < 10 ? '0' : ''}${s.toFixed(0)}s`;
 }
 
-/**
- * Extracts narrative sentences/beats from any prompt (2-word topic OR 5,000-word detailed script),
- * and gracefully expands short topics to fill multi-shot or multi-minute timelines without repetition.
- */
 function buildStoryBeats(
   rawPrompt: string,
   dialogueLine: string,
@@ -148,7 +175,6 @@ function buildStoryBeats(
   const combinedInput = [...rawSegments, ...extraFacts.filter((f) => f.length > 8)];
 
   if (combinedInput.length >= shotCount) {
-    // Group segments evenly across shots so the entire detailed story is covered!
     const beats: string[] = [];
     for (let i = 0; i < shotCount; i++) {
       const startIdx = Math.floor((i * combinedInput.length) / shotCount);
@@ -168,22 +194,23 @@ function buildStoryBeats(
     return beats;
   }
 
-  // Short topic or concise logline -> craft cinematic narrative arc beats around the core subject!
   const subject =
-    rawSegments[0]?.slice(0, 95) || cleaned.slice(0, 95) || 'A lone figure beneath the crimson sky';
+    rawSegments[0]?.slice(0, 95) ||
+    cleaned.slice(0, 95) ||
+    'A lone figure beneath the crimson sky';
 
   const arcTemplates = [
     subject,
-    rawSegments[1] || `Shadows lengthen across the horizon as the atmosphere shifts.`,
-    rawSegments[2] || `Every breath slows in the stillness before the decisive moment.`,
-    `Eyes lock onto the light — no turning back now.`,
-    `In a single blinding instant, energy tears across the frame!`,
-    `Echoes ripple outward through the silence left behind.`,
-    `High above the world, light and shadow find a new balance.`,
-    `Step by step, the journey presses deeper into the unknown.`,
-    `Memory and resolve converge at the edge of the storm.`,
-    `A sudden spark ignites the dark skyline once again!`,
-    `Calm returns as drifting light settles across the ground.`,
+    rawSegments[1] || 'Shadows lengthen across the horizon as the atmosphere shifts.',
+    rawSegments[2] || 'Every breath slows in the stillness before the decisive moment.',
+    'Eyes lock onto the light — no turning back now.',
+    'In a single blinding instant, energy tears across the frame.',
+    'Echoes ripple outward through the silence left behind.',
+    'High above the world, light and shadow find a new balance.',
+    'Step by step, the journey presses deeper into the unknown.',
+    'Memory and resolve converge at the edge of the storm.',
+    'A sudden spark ignites the dark skyline once again.',
+    'Calm returns as drifting light settles across the ground.',
     dialogueLine.trim() || rawSegments[rawSegments.length - 1] || subject,
   ];
 
@@ -202,23 +229,18 @@ function buildStoryBeats(
   return beats;
 }
 
-/**
- * Generates the exact sequence of ShotKinds & durations for ANY custom duration (4s to 600s).
- */
 function buildShotBlueprints(
   totalSeconds: number
 ): Array<{ kind: ShotKind; weight: number; sakuga: boolean }> {
   if (totalSeconds <= 9) {
-    // Classic 3-shot html-anime 8s arc
     return [
       { kind: 'establish', weight: 2.4, sakuga: false },
-      { kind: 'sakuga', weight: 3.6, sakuga: true },
-      { kind: 'button', weight: 2.0, sakuga: false },
+      { kind: 'sakuga', weight: 3.4, sakuga: true },
+      { kind: 'button', weight: 2.2, sakuga: false },
     ];
   }
 
   if (totalSeconds <= 14) {
-    // Classic 4-shot html-anime 12s arc
     return [
       { kind: 'establish', weight: 2.5, sakuga: false },
       { kind: 'approach', weight: 2.5, sakuga: false },
@@ -228,7 +250,6 @@ function buildShotBlueprints(
   }
 
   if (totalSeconds <= 24) {
-    // Classic 6-shot html-anime 20s arc
     return [
       { kind: 'establish', weight: 3.0, sakuga: false },
       { kind: 'approach', weight: 3.0, sakuga: false },
@@ -239,7 +260,6 @@ function buildShotBlueprints(
     ];
   }
 
-  // Custom longer durations (25s up to 10 minutes!): dynamic multi-act anime cinema rhythm (~4.2s avg per shot)
   const targetCount = Math.max(7, Math.min(90, Math.round(totalSeconds / 4.2)));
   const cycle: ShotKind[] = [
     'approach',
@@ -273,20 +293,61 @@ function buildShotBlueprints(
 }
 
 /**
- * Optional ultra-fast Wikipedia open fact fetcher (2.4s max timeout, 100% free & zero API key)
- * so short factual/historical/science topics automatically gain rich real-world story captions!
+ * Guaranteed non-zero frame distributor: every shot gets >= minFrames (>= 24f = 1.0s)
+ * and total sum equals totalFrames with zero rounding overflow!
+ */
+function allocateExactShotFrames(weights: number[], totalFrames: number): number[] {
+  const count = weights.length;
+  const minFrames = Math.max(12, Math.min(FPS, Math.floor(totalFrames / count)));
+  const reservable = totalFrames - minFrames * count;
+
+  if (reservable <= 0) {
+    const base = Math.floor(totalFrames / count);
+    const out = new Array(count).fill(base);
+    out[count - 1] += totalFrames - base * count;
+    return out;
+  }
+
+  const weightSum = weights.reduce((a, b) => a + b, 0) || count;
+  const out: number[] = [];
+  let distributedExtra = 0;
+  let cumWeight = 0;
+
+  for (let i = 0; i < count; i++) {
+    cumWeight += weights[i];
+    const targetExtra =
+      i === count - 1
+        ? reservable
+        : Math.round((cumWeight / weightSum) * reservable);
+    const extraForShot = Math.max(0, targetExtra - distributedExtra);
+    distributedExtra += extraForShot;
+    out.push(minFrames + extraForShot);
+  }
+
+  return out;
+}
+
+/**
+ * Optional ultra-fast Wikipedia open fact fetcher (only runs on concise Latin/English topic queries).
  */
 export async function fetchOptionalTopicContext(prompt: string): Promise<string[]> {
   const trimmed = prompt.trim();
-  // If user already wrote a detailed multi-sentence story (>180 chars), use their exact story directly!
-  if (trimmed.length > 180 || trimmed.includes('\n')) return [];
+  const wordCount = trimmed.split(/\s+/).filter(Boolean).length;
+  if (
+    !trimmed ||
+    trimmed.length > 90 ||
+    wordCount > 9 ||
+    trimmed.includes('\n') ||
+    !/^[a-zA-Z0-9\s,.'"-]+$/.test(trimmed)
+  ) {
+    return [];
+  }
 
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 2400);
+  const timer = setTimeout(() => ctrl.abort(), 2000);
   try {
-    const q = trimmed.slice(0, 80);
     const url = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(
-      q
+      trimmed
     )}&utf8=&format=json&origin=*&srlimit=3`;
     const resp = await fetch(url, { signal: ctrl.signal });
     if (!resp.ok) return [];
@@ -313,9 +374,69 @@ export async function fetchOptionalTopicContext(prompt: string): Promise<string[
   }
 }
 
-/**
- * Compiles any StudioFormConfig into a complete, deterministic, frame-accurate CompiledFilmProject!
- */
+export function buildShotSheetMarkdown(params: {
+  cleanPrompt: string;
+  totalSeconds: number;
+  totalFrames: number;
+  width: number;
+  height: number;
+  aspect: StudioFormConfig['aspect'];
+  colorScript: CompiledFilmProject['colorScript'];
+  shots: FilmShot[];
+}): string {
+  const {
+    cleanPrompt,
+    totalSeconds,
+    totalFrames,
+    width,
+    height,
+    aspect,
+    colorScript,
+    shots,
+  } = params;
+
+  const frameNote =
+    aspect === '9:16'
+      ? 'Compose the tall frame (9:16). Character eyes in the upper half; captions in the lower fifth.'
+      : aspect === '1:1'
+      ? 'Compose the balanced square frame (1:1). Center-weighted focal action with clean lower-fifth captions.'
+      : 'Compose the wide frame (16:9). Place eyes on a third with look-room in front of the gaze.';
+
+  const paintLines = Object.entries(colorScript.colors)
+    .map(([k, hex]) => `- ${k} ${hex}`)
+    .join('\n');
+
+  const shotMdBlocks = shots
+    .map((s) => {
+      const tag = s.sakuga ? `${s.label} — the expensive shot` : s.label;
+      return `### ${s.index + 1} · ${tag} · ${s.startSec.toFixed(2)}s–${s.endSec.toFixed(2)}s\n${
+        s.directionNote
+      }\n> Caption: "${s.caption}"`;
+    })
+    .join('\n\n');
+
+  return [
+    '# html-anime · Self-Rendering Studio Sheet',
+    '',
+    cleanPrompt,
+    '',
+    `${totalSeconds}s (${formatDurationClock(totalSeconds)}) · ${FPS}fps · ${totalFrames} frames · ${width}×${height} (${aspect})`,
+    `Color script: ${colorScript.name}`,
+    paintLines,
+    '',
+    frameNote,
+    '',
+    '## Drawing & Timing Law',
+    '- Character acting and cloth follow-through on twos (12fps holds inside 24fps timeline).',
+    '- Rain, embers, petals, sparks, and blade trails on ones (24fps).',
+    '- Color-dip cuts straddle act transitions; final 8 frames fade cleanly to ink.',
+    '',
+    '## Compiled Shots',
+    shotMdBlocks,
+    '',
+  ].join('\n');
+}
+
 export function compileAnimeFilmProject(
   config: StudioFormConfig,
   extraFacts: string[] = []
@@ -329,22 +450,34 @@ export function compileAnimeFilmProject(
   );
   const totalFrames = Math.max(FPS * 4, Math.round(totalSeconds * FPS));
   const { width, height } = getDimensions(config.aspect, config.quality);
-  const colorScript = COLOR_SCRIPTS[config.scriptId] || COLOR_SCRIPTS.indigo;
-  const baseSeed = hashString(`${cleanPrompt}|${config.aspect}|${config.scriptId}|${totalSeconds}`);
+
+  const resolvedScriptId = inferColorScriptFromPrompt(cleanPrompt, config.scriptId);
+  const colorScript = COLOR_SCRIPTS[resolvedScriptId] || COLOR_SCRIPTS.indigo;
+  const baseSeed = hashString(
+    `${cleanPrompt}|${config.aspect}|${resolvedScriptId}|${totalSeconds}`
+  );
   const rng = mulberry32(baseSeed);
 
   const primaryWorld = inferWorldFromPrompt(cleanPrompt, config.world);
   const primaryWeather = inferWeatherFromPrompt(
     cleanPrompt,
     config.weather,
-    config.scriptId,
+    resolvedScriptId,
     primaryWorld
   );
 
   const blueprints = buildShotBlueprints(totalSeconds);
-  const beats = buildStoryBeats(cleanPrompt, config.dialogue, blueprints.length, extraFacts);
+  const beats = buildStoryBeats(
+    cleanPrompt,
+    config.dialogue,
+    blueprints.length,
+    extraFacts
+  );
+  const frameCounts = allocateExactShotFrames(
+    blueprints.map((b) => b.weight),
+    totalFrames
+  );
 
-  const weightSum = blueprints.reduce((acc, b) => acc + b.weight, 0);
   const worldCycle: ConcreteWorld[] = [
     primaryWorld,
     primaryWorld,
@@ -358,18 +491,13 @@ export function compileAnimeFilmProject(
 
   for (let i = 0; i < blueprints.length; i++) {
     const bp = blueprints[i];
-    const isLast = i === blueprints.length - 1;
-    const allocatedFrames = isLast
-      ? totalFrames - cursorFrame
-      : Math.max(FPS * 2, Math.round((bp.weight / weightSum) * totalFrames));
-
     const startFrame = cursorFrame;
-    const endFrame = Math.min(totalFrames, startFrame + allocatedFrames);
+    const endFrame = startFrame + frameCounts[i];
     cursorFrame = endFrame;
 
     const startSec = Number((startFrame / FPS).toFixed(3));
     const endSec = Number((endFrame / FPS).toFixed(3));
-    const durationSec = Number(((endFrame - startFrame) / FPS).toFixed(3));
+    const durationSec = Number(((endFrame - startFrame) / FPS).toFixed(2));
 
     const cameraMove: CameraMove =
       bp.kind === 'sakuga' || bp.kind === 'turn'
@@ -423,47 +551,19 @@ export function compileAnimeFilmProject(
     .slice(0, 6)
     .join(' ');
 
-  const frameNote =
-    config.aspect === '9:16'
-      ? 'Compose the tall frame (9:16). Character eyes in the upper half; captions in the lower fifth.'
-      : 'Compose the wide frame (16:9). Place eyes on a third with look-room in front of the gaze.';
-
-  const paintLines = Object.entries(colorScript.colors)
-    .map(([k, hex]) => `- ${k} ${hex}`)
-    .join('\n');
-
-  const shotMdBlocks = shots
-    .map((s) => {
-      const tag = s.sakuga ? `${s.label} — the expensive shot` : s.label;
-      return `### ${s.index + 1} · ${tag} · ${s.startSec.toFixed(2)}s–${s.endSec.toFixed(2)}s\n${
-        s.directionNote
-      }\n> Caption: "${s.caption}"`;
-    })
-    .join('\n\n');
-
-  const shotSheetMarkdown = [
-    '# html-anime · Self-Rendering Studio Sheet',
-    '',
+  const shotSheetMarkdown = buildShotSheetMarkdown({
     cleanPrompt,
-    '',
-    `${totalSeconds}s (${formatDurationClock(totalSeconds)}) · ${FPS}fps · ${totalFrames} frames · ${width}×${height} (${config.aspect})`,
-    `Color script: ${colorScript.name}`,
-    paintLines,
-    '',
-    frameNote,
-    '',
-    '## Drawing & Timing Law',
-    '- Character acting and cloth follow-through on twos (12fps holds inside 24fps timeline).',
-    '- Rain, embers, petals, sparks, and blade trails on ones (24fps).',
-    '- Color-dip cuts straddle act transitions; final 8 frames fade cleanly to ink.',
-    '',
-    '## Compiled Shots',
-    shotMdBlocks,
-    '',
-  ].join('\n');
+    totalSeconds,
+    totalFrames,
+    width,
+    height,
+    aspect: config.aspect,
+    colorScript,
+    shots,
+  });
 
   return {
-    id: `film-${Date.now()}`,
+    id: `film-${Date.now()}-${Math.floor(rng() * 10000)}`,
     title: titleWords || 'Untitled Anime Film',
     slug,
     rawPrompt: cleanPrompt,

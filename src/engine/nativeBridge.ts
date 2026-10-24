@@ -10,6 +10,9 @@ declare global {
         timeoutMs: number
       ) => void;
       synthesizeNativeWavAsync?: (reqId: string, text: string, langTag: string) => void;
+      beginDownloadFile?: (fileName: string, mimeType: string) => string;
+      appendDownloadChunk?: (transferId: string, base64Chunk: string) => string;
+      finishDownloadFile?: (transferId: string) => string;
       saveBase64ToDownloads: (base64Data: string, fileName: string, mimeType: string) => string;
       showToast: (message: string) => void;
       vibrate: (ms: number) => void;
@@ -49,6 +52,15 @@ function b64ToBytes(b64: string): Uint8Array {
   const out = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
   return out;
+}
+
+function bytesToB64(bytes: Uint8Array): string {
+  const chunkSize = 0x8000;
+  const parts: string[] = [];
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    parts.push(String.fromCharCode(...bytes.subarray(i, i + chunkSize)));
+  }
+  return btoa(parts.join(''));
 }
 
 function initCallbacks(): void {
@@ -148,7 +160,6 @@ export async function fetchBinaryBridge(
     const r = await fetch(url, { signal: ctrl.signal });
     if (r.ok) return await r.arrayBuffer();
   } catch {
-    // Fallback to local server proxy if available
     try {
       const pr = await fetch('/api/proxy-binary', {
         method: 'POST',
@@ -195,19 +206,6 @@ export async function synthesizeNativeSpeechWav(
   });
 }
 
-function blobToBase64(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const s = String(reader.result || '');
-      const comma = s.indexOf(',');
-      resolve(comma >= 0 ? s.slice(comma + 1) : s);
-    };
-    reader.onerror = reject;
-    reader.readAsDataURL(blob);
-  });
-}
-
 export async function downloadBlobCrossPlatform(
   blobOrUrl: Blob | string,
   fileName: string,
@@ -217,9 +215,33 @@ export async function downloadBlobCrossPlatform(
   const blob =
     typeof blobOrUrl === 'string' ? await (await fetch(blobOrUrl)).blob() : blobOrUrl;
 
-  if (window.HtmlAnimeNativeBridge) {
-    const b64 = await blobToBase64(blob);
-    window.HtmlAnimeNativeBridge.saveBase64ToDownloads(b64, fileName, mimeType);
+  const bridge = typeof window !== 'undefined' ? window.HtmlAnimeNativeBridge : undefined;
+  if (bridge) {
+    // Zero-OOM streaming 512KB chunked writer for Android APK (handles arbitrarily large MP4s!)
+    if (
+      bridge.beginDownloadFile &&
+      bridge.appendDownloadChunk &&
+      bridge.finishDownloadFile
+    ) {
+      const transferId = bridge.beginDownloadFile(fileName, mimeType);
+      if (transferId && !transferId.startsWith('ERROR:')) {
+        const sliceSize = 512 * 1024;
+        for (let offset = 0; offset < blob.size; offset += sliceSize) {
+          const slice = blob.slice(offset, Math.min(blob.size, offset + sliceSize));
+          const buf = new Uint8Array(await slice.arrayBuffer());
+          const res = bridge.appendDownloadChunk(transferId, bytesToB64(buf));
+          if (res && res.startsWith('ERROR:')) {
+            throw new Error(res);
+          }
+        }
+        bridge.finishDownloadFile(transferId);
+        return;
+      }
+    }
+
+    // Fallback single-shot Base64 save
+    const fullBytes = new Uint8Array(await blob.arrayBuffer());
+    bridge.saveBase64ToDownloads(bytesToB64(fullBytes), fileName, mimeType);
     return;
   }
 
