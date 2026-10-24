@@ -3,6 +3,15 @@ import { PhoneActionPayload } from '../types';
 declare global {
   interface Window {
     OpenBrainNativeBridge?: {
+      httpRequestAsync?: (
+        reqId: string,
+        urlStr: string,
+        method: string,
+        headersJson: string,
+        bodyStr: string,
+        timeoutMs: number
+      ) => void;
+      synthesizeNativeWavAsync?: (reqId: string, text: string, langTag: string) => void;
       saveBase64ToDownloads: (base64Data: string, fileName: string, mimeType: string) => string;
       showToast: (message: string) => void;
       vibrate: (ms: number) => void;
@@ -23,6 +32,24 @@ declare global {
       copyClipboard: (text: string) => string;
       setSystemBarTheme?: (isDark: boolean) => void;
     };
+    __obHttpDone?: (
+      reqId: string,
+      payload: {
+        ok: boolean;
+        status: number;
+        contentType?: string;
+        bodyBase64?: string;
+        error?: string;
+      }
+    ) => void;
+    __obTtsWavDone?: (
+      reqId: string,
+      payload: {
+        ok: boolean;
+        audioBase64?: string;
+        error?: string;
+      }
+    ) => void;
   }
 }
 

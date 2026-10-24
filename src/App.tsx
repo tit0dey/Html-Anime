@@ -31,6 +31,7 @@ import {
   saveSkills,
 } from './services/skillsAndConnectors';
 import {
+  showNativeToast,
   speakWithDeviceFallback,
   syncNativeSystemBars,
   triggerHaptic,
@@ -389,7 +390,7 @@ export function App() {
             prev || `Speak in my newly cloned voice "${vp.name}": Hello, Open Brain is live!`
         );
       } catch (err: any) {
-        alert(`Could not analyze audio file: ${err?.message || String(err)}`);
+        showNativeToast(`Could not analyze audio file: ${err?.message || String(err)}`);
       }
       e.target.value = '';
       return;
@@ -409,7 +410,7 @@ export function App() {
       );
       setAttachedFileText(loadedDocs[0]?.content.slice(0, 16000));
     } catch {
-      alert('Unsupported file format.');
+      showNativeToast('Unsupported file format.');
     }
     e.target.value = '';
   };
@@ -826,6 +827,7 @@ export function App() {
         open={voiceModalOpen}
         settings={settings}
         profiles={voiceProfiles}
+        onUpdateSettings={updateSettings}
         onSaveProfile={handleSaveVoiceProfile}
         onDeleteProfile={handleDeleteVoiceProfile}
         onSelectProfile={(id) => updateSettings({ activeVoiceProfileId: id })}

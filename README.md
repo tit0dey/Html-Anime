@@ -2,14 +2,14 @@
 
 <img src="./public/icon.svg" width="108" height="108" alt="Open Brain Logo" />
 
-# Open Brain v4.0 Omega
+# Open Brain v4.5 Voicebox & Native-Mesh Edition
 ### **100% Free, Unlimited & Zero-Phone-Pressure Autonomous AI Super-Agent + Android APK**
 
-[![Download Android APK](https://img.shields.io/badge/Download_APK-OpenBrain_v4.0_Omega_Signed-111827?style=for-the-badge&logo=android&logoColor=white)](https://github.com/tit0dey/TradeIQ/raw/main/apk/OpenBrain-AI.apk)
-[![Zero Phone Pressure](https://img.shields.io/badge/Featherlight-~235_KB_•_0%25_Phone_Lag-0F766E?style=for-the-badge)](#)
-[![Free Unlimited](https://img.shields.io/badge/100%25_Free-4--Mind_Omega_Council_+_Self--Critic-14B8A6?style=for-the-badge)](#)
+[![Download Android APK](https://img.shields.io/badge/Download_APK-OpenBrain_v4.5_Signed-111827?style=for-the-badge&logo=android&logoColor=white)](https://github.com/tit0dey/TradeIQ/raw/main/apk/OpenBrain-AI.apk)
+[![Zero Phone Pressure](https://img.shields.io/badge/Featherlight-~240_KB_•_0%25_Phone_Lag-0F766E?style=for-the-badge)](#)
+[![Free Unlimited](https://img.shields.io/badge/100%25_Free-Multi--Cloud_Mesh_+_Voicebox-14B8A6?style=for-the-badge)](#)
 
-**Unified Chat-First Super-Agent • 4-Mind Omega Council + Adversarial Red-Team Judge • Self-Healing Code Interpreter • BM25 Multi-File Long-Context RAG • Permanent Personal Memory • Multi-Wave Deep Research • Code-to-MP4 & Cinema Video • Zero-Shot Voice Cloning • Flux.1 HD Art • Native Android Phone Control**
+**Unified Chat-First Super-Agent • CORS-Free Android Native Java HTTP • Multi-Cloud Free AI Mesh (Pollinations + HF ZeroGPU Qwen/DeepSeek) • Voicebox Multi-Engine Voice Cloning (Chatterbox / Qwen3-TTS / F5-TTS / Vocal DNA Pedalboard) • Self-Healing Code Interpreter • BM25 Multi-File RAG • Permanent Memory • Deep Research • Code-to-MP4 Video • Native Android Phone Control**
 
 </div>
 
@@ -19,9 +19,9 @@
 
 Click the direct raw link below in **Chrome** (or tap **Download** from the `⋮` menu in the GitHub mobile app) to download and install **`OpenBrain-AI.apk`** directly on your phone:
 
-**[Direct Download `OpenBrain-AI.apk` (v4.0 Omega Signed)](https://github.com/tit0dey/TradeIQ/raw/main/apk/OpenBrain-AI.apk)**
+**[Direct Download `OpenBrain-AI.apk` (v4.5 Signed)](https://github.com/tit0dey/TradeIQ/raw/main/apk/OpenBrain-AI.apk)**
 
-- **Package**: `com.openbrain.ai` (`versionName: 4.0.0`, `versionCode: 5`, Android 7.0 – Android 16+)
+- **Package**: `com.openbrain.ai` (`versionName: 4.5.0`, `versionCode: 6`, Android 7.0 – Android 16+)
 - **Featherlight Footprint**: Under 200 KB with **0 MB local model bloat** and automatic `onPause()` WebView suspension for **0% background battery drain**.
 
 ---

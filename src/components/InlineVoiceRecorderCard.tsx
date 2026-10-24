@@ -28,6 +28,7 @@ export const InlineVoiceRecorderCard: React.FC<Props> = ({
   const [isRecording, setIsRecording] = useState(false);
   const [seconds, setSeconds] = useState(0);
   const [analyzing, setAnalyzing] = useState(false);
+  const [statusError, setStatusError] = useState<string | null>(null);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<BlobPart[]>([]);
@@ -59,15 +60,17 @@ export const InlineVoiceRecorderCard: React.FC<Props> = ({
         biometrics,
       };
       onSaveProfile(created);
+      setStatusError(null);
       triggerHaptic(25);
     } catch (err: any) {
-      alert(`Could not process audio sample: ${err?.message || String(err)}`);
+      setStatusError(`Could not process audio sample: ${err?.message || String(err)}`);
     } finally {
       setAnalyzing(false);
     }
   };
 
   const startRec = async () => {
+    setStatusError(null);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       chunksRef.current = [];
@@ -94,7 +97,7 @@ export const InlineVoiceRecorderCard: React.FC<Props> = ({
         });
       }, 1000);
     } catch {
-      alert('Microphone permission is needed to record live. You can also upload any .wav or .mp3 voice clip.');
+      setStatusError('Microphone permission is needed to record live. You can also upload any .wav or .mp3 voice clip.');
     }
   };
 
@@ -180,6 +183,12 @@ export const InlineVoiceRecorderCard: React.FC<Props> = ({
           Upload Audio
         </button>
       </div>
+
+      {statusError && (
+        <div className="text-[11px] text-amber-700 dark:text-amber-300 bg-amber-500/10 rounded-xl px-3 py-2">
+          {statusError}
+        </div>
+      )}
 
       {profiles.length > 0 && (
         <div className="pt-1 space-y-1.5">

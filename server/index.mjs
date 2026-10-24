@@ -12,6 +12,7 @@ const app = express();
 const PORT = Number(process.env.PORT || 5173);
 
 app.disable('x-powered-by');
+app.use(express.json({ limit: '10mb' }));
 
 app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -28,10 +29,55 @@ app.get('/api/health', (_req, res) => {
   res.json({
     ok: true,
     app: 'Open Brain',
-    version: '4.0.0',
+    version: '4.5.0',
     apkReady: fs.existsSync(APK_FILE),
     apkSizeBytes: fs.existsSync(APK_FILE) ? fs.statSync(APK_FILE).size : 0,
   });
+});
+
+app.post('/api/proxy', async (req, res) => {
+  try {
+    const { url, method = 'GET', headers = {}, body, timeoutMs = 18000 } = req.body || {};
+    if (!url || typeof url !== 'string' || !/^https?:\/\//i.test(url)) {
+      res.status(400).json({ ok: false, status: 400, error: 'Invalid URL' });
+      return;
+    }
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), Math.min(45000, Number(timeoutMs) || 18000));
+    try {
+      const upstream = await fetch(url, {
+        method,
+        headers: {
+          'User-Agent':
+            'Mozilla/5.0 (Linux; Android 14; OpenBrain/4.5) AppleWebKit/537.36 Chrome/126.0.0.0 Mobile Safari/537.36',
+          Referer: 'https://openbrain.app/',
+          ...headers,
+        },
+        body:
+          method !== 'GET' && method !== 'HEAD' && body !== undefined
+            ? typeof body === 'string'
+              ? body
+              : JSON.stringify(body)
+            : undefined,
+        signal: ctrl.signal,
+      });
+      const buf = Buffer.from(await upstream.arrayBuffer());
+      res.json({
+        ok: upstream.ok,
+        status: upstream.status,
+        contentType: upstream.headers.get('content-type') || '',
+        bodyBase64: buf.toString('base64'),
+      });
+    } finally {
+      clearTimeout(timer);
+    }
+  } catch (err) {
+    res.json({
+      ok: false,
+      status: 0,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
 });
 
 app.get(['/OpenBrain-AI.apk', '/apk/OpenBrain-AI.apk'], (_req, res) => {

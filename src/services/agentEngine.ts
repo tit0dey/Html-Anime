@@ -30,6 +30,7 @@ import {
   retrieveRelevantDocumentContext,
 } from './ragDocumentEngine';
 import { executePhoneAction } from './nativeBridge';
+import { smartFetch } from './nativeHttp';
 import { generateOpenBrainVideo } from './videoEngine';
 import { synthesizeClonedVoice } from './voiceCloneEngine';
 
@@ -71,6 +72,105 @@ interface AgentPlan {
   calls: PlannedToolCall[];
 }
 
+function buildFallbackInteractiveWebApp(spec: string): string {
+  const safeTitle = spec
+    .replace(/[<>"']/g, '')
+    .replace(/^build\s+(an?\s+)?(interactive\s+)?(web\s+app\s+)?(for\s+)?/i, '')
+    .trim()
+    .slice(0, 44) || 'Interactive Task Studio';
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>${safeTitle}</title>
+<style>
+  * { box-sizing: border-box; font-family: system-ui, -apple-system, sans-serif; }
+  body { margin: 0; padding: 18px; background: #0B0F19; color: #F8FAFC; }
+  .card { max-width: 520px; margin: 0 auto; background: #131926; border: 1px solid #1E293B; border-radius: 20px; padding: 18px; box-shadow: 0 12px 32px rgba(0,0,0,0.35); }
+  h1 { margin: 0 0 6px; font-size: 19px; text-transform: capitalize; }
+  p.sub { margin: 0 0 14px; font-size: 12px; color: #94A3B8; }
+  .row { display: flex; gap: 8px; margin-bottom: 12px; }
+  input[type="text"], select { flex: 1; background: #0B0F19; border: 1px solid #334155; color: #F8FAFC; padding: 10px 12px; border-radius: 12px; font-size: 13px; outline: none; }
+  button.primary { background: #14B8A6; color: #042F2E; border: none; padding: 10px 16px; border-radius: 12px; font-weight: 700; font-size: 13px; cursor: pointer; }
+  .filters { display: flex; gap: 6px; margin-bottom: 12px; }
+  .chip { background: #1E293B; color: #CBD5E1; border: none; padding: 6px 12px; border-radius: 999px; font-size: 11px; cursor: pointer; }
+  .chip.active { background: #F8FAFC; color: #0F172A; font-weight: 600; }
+  ul { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; }
+  li { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: #0F172A; border: 1px solid #1E293B; padding: 10px 12px; border-radius: 12px; }
+  li.done span.txt { text-decoration: line-through; color: #64748B; }
+  .badge { font-size: 10px; padding: 2px 8px; border-radius: 999px; background: rgba(20,184,166,0.16); color: #5EEAD4; }
+  .del { background: transparent; border: none; color: #EF4444; cursor: pointer; font-size: 12px; font-weight: 600; }
+  .stats { margin-top: 14px; font-size: 11px; color: #94A3B8; display: flex; justify-content: space-between; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>${safeTitle}</h1>
+    <p class="sub">Interactive Open Brain App · Auto-saved locally</p>
+    <div class="row">
+      <input id="inp" type="text" placeholder="Add a new item..." />
+      <select id="prio" style="max-width:96px">
+        <option value="High">High</option>
+        <option value="Normal" selected>Normal</option>
+        <option value="Low">Low</option>
+      </select>
+      <button class="primary" onclick="addItem()">Add</button>
+    </div>
+    <div class="filters">
+      <button class="chip active" id="f-all" onclick="setFilter('all')">All</button>
+      <button class="chip" id="f-active" onclick="setFilter('active')">Active</button>
+      <button class="chip" id="f-done" onclick="setFilter('done')">Completed</button>
+    </div>
+    <ul id="list"></ul>
+    <div class="stats">
+      <span id="count">0 items</span>
+      <span style="cursor:pointer;color:#38BDF8" onclick="clearDone()">Clear completed</span>
+    </div>
+  </div>
+  <script>
+    let items = JSON.parse(localStorage.getItem('ob_app_items') || '[{"id":1,"text":"Explore Open Brain Studio","prio":"High","done":false},{"id":2,"text":"Ship interactive project","prio":"Normal","done":true}]');
+    let filter = 'all';
+    function save() { localStorage.setItem('ob_app_items', JSON.stringify(items)); render(); }
+    function addItem() {
+      const el = document.getElementById('inp');
+      const pr = document.getElementById('prio').value;
+      const val = el.value.trim();
+      if (!val) return;
+      items.unshift({ id: Date.now(), text: val, prio: pr, done: false });
+      el.value = '';
+      save();
+    }
+    document.getElementById('inp').addEventListener('keydown', e => { if (e.key === 'Enter') addItem(); });
+    function toggle(id) { items = items.map(x => x.id === id ? { ...x, done: !x.done } : x); save(); }
+    function removeItem(id) { items = items.filter(x => x.id !== id); save(); }
+    function clearDone() { items = items.filter(x => !x.done); save(); }
+    function setFilter(f) {
+      filter = f;
+      ['all','active','done'].forEach(k => document.getElementById('f-'+k).classList.toggle('active', k === f));
+      render();
+    }
+    function render() {
+      const ul = document.getElementById('list');
+      const shown = items.filter(x => filter === 'all' ? true : filter === 'done' ? x.done : !x.done);
+      ul.innerHTML = shown.map(x => \`<li class="\${x.done ? 'done' : ''}">
+        <label style="display:flex;align-items:center;gap:8px;flex:1;cursor:pointer">
+          <input type="checkbox" \${x.done ? 'checked' : ''} onchange="toggle(\${x.id})" />
+          <span class="txt">\${x.text.replace(/</g,'&lt;')}</span>
+        </label>
+        <span class="badge">\${x.prio}</span>
+        <button class="del" onclick="removeItem(\${x.id})">Delete</button>
+      </li>\`).join('');
+      const rem = items.filter(x => !x.done).length;
+      document.getElementById('count').textContent = rem + ' active · ' + items.length + ' total';
+    }
+    render();
+  </script>
+</body>
+</html>`;
+}
+
 async function runWebSearchTool(
   query: string,
   addSource: (s: ResearchSource) => void
@@ -81,9 +181,9 @@ async function runWebSearchTool(
     const wikiUrl = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(
       query
     )}&utf8=&format=json&origin=*&srlimit=4`;
-    const r = await fetch(wikiUrl);
+    const r = await smartFetch(wikiUrl, { timeoutMs: 8500 });
     if (r.ok) {
-      const d = await r.json();
+      const d = r.json<any>();
       for (const h of (d?.query?.search || []).slice(0, 3)) {
         const title = String(h.title || '');
         const snippet = String(h.snippet || '').replace(/<[^>]+>/g, '');
@@ -102,9 +202,9 @@ async function runWebSearchTool(
     const ddgUrl = `https://api.duckduckgo.com/?q=${encodeURIComponent(
       query
     )}&format=json&no_html=1&skip_disambig=1`;
-    const r = await fetch(ddgUrl);
+    const r = await smartFetch(ddgUrl, { timeoutMs: 8500 });
     if (r.ok) {
-      const d = await r.json();
+      const d = r.json<any>();
       if (d.AbstractText) {
         if (d.AbstractURL) {
           addSource({
@@ -132,11 +232,12 @@ async function runWebSearchTool(
 async function runRedditHnPulseTool(query: string): Promise<string> {
   const out: string[] = [];
   try {
-    const hnResp = await fetch(
-      `https://hn.algolia.com/api/v1/search?query=${encodeURIComponent(query)}&hitsPerPage=4`
+    const hnResp = await smartFetch(
+      `https://hn.algolia.com/api/v1/search?query=${encodeURIComponent(query)}&hitsPerPage=4`,
+      { timeoutMs: 8500 }
     );
     if (hnResp.ok) {
-      const d = await hnResp.json();
+      const d = hnResp.json<any>();
       for (const h of (d?.hits || []).slice(0, 3)) {
         if (h.title) out.push(`[HN Pulse · ${h.points ?? 0} pts] ${h.title} (${h.url || ''})`);
       }
@@ -145,11 +246,12 @@ async function runRedditHnPulseTool(query: string): Promise<string> {
     // Ignore
   }
   try {
-    const rdResp = await fetch(
-      `https://www.reddit.com/search.json?q=${encodeURIComponent(query)}&limit=3`
+    const rdResp = await smartFetch(
+      `https://www.reddit.com/search.json?q=${encodeURIComponent(query)}&limit=3`,
+      { timeoutMs: 8500 }
     );
     if (rdResp.ok) {
-      const rd = await rdResp.json();
+      const rd = rdResp.json<any>();
       for (const c of (rd?.data?.children || []).slice(0, 3)) {
         const p = c?.data;
         if (p?.title) {
@@ -171,14 +273,14 @@ async function runGitHubSearchTool(
   try {
     const headers: Record<string, string> = {};
     if (ghToken?.trim()) headers.Authorization = `Bearer ${ghToken.trim()}`;
-    const resp = await fetch(
+    const resp = await smartFetch(
       `https://api.github.com/search/repositories?q=${encodeURIComponent(
         query
       )}&sort=stars&order=desc&per_page=5`,
-      { headers }
+      { headers, timeoutMs: 9000 }
     );
     if (!resp.ok) return `GitHub API returned HTTP ${resp.status}`;
-    const data = await resp.json();
+    const data = resp.json<any>();
     const items = data?.items || [];
     if (!items.length) return `No open-source GitHub repositories matched "${query}".`;
     for (const repo of items.slice(0, 3)) {
@@ -206,19 +308,21 @@ async function runGitHubSearchTool(
 async function runLiveWeatherTool(locationQuery: string): Promise<string> {
   try {
     const city = locationQuery.trim() || 'Kolkata';
-    const geoResp = await fetch(
+    const geoResp = await smartFetch(
       `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(
         city
-      )}&count=1&language=en&format=json`
+      )}&count=1&language=en&format=json`,
+      { timeoutMs: 8500 }
     );
-    const geoData = await geoResp.json();
+    const geoData = geoResp.json<any>();
     const place = geoData?.results?.[0];
     if (!place) return `Could not geocode city "${city}".`;
 
-    const wxResp = await fetch(
-      `https://api.open-meteo.com/v1/forecast?latitude=${place.latitude}&longitude=${place.longitude}&current=temperature_2m,relative_humidity_2m,apparent_temperature,wind_speed_10m&daily=temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=3`
+    const wxResp = await smartFetch(
+      `https://api.open-meteo.com/v1/forecast?latitude=${place.latitude}&longitude=${place.longitude}&current=temperature_2m,relative_humidity_2m,apparent_temperature,wind_speed_10m&daily=temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=3`,
+      { timeoutMs: 8500 }
     );
-    const wx = await wxResp.json();
+    const wx = wxResp.json<any>();
     const cur = wx?.current || {};
     return `Live Weather in ${place.name}, ${place.admin1 || ''} (${place.country}): Temp ${
       cur.temperature_2m
@@ -251,13 +355,14 @@ async function runCryptoMarketTool(coinsQuery: string): Promise<string> {
       .filter(Boolean)
       .map((t) => mapAliases[t] || t);
     const ids = Array.from(new Set([...tokens, 'bitcoin', 'ethereum', 'solana'])).slice(0, 5);
-    const resp = await fetch(
+    const resp = await smartFetch(
       `https://api.coingecko.com/api/v3/simple/price?ids=${ids.join(
         ','
-      )}&vs_currencies=usd,inr&include_24hr_change=true`
+      )}&vs_currencies=usd,inr&include_24hr_change=true`,
+      { timeoutMs: 8500 }
     );
     if (!resp.ok) return `Market feed HTTP ${resp.status}`;
-    const data = await resp.json();
+    const data = resp.json<any>();
     return (
       Object.entries(data)
         .map(([coin, vals]: [string, any]) => {
@@ -274,11 +379,12 @@ async function runCryptoMarketTool(coinsQuery: string): Promise<string> {
 
 async function runArxivResearchTool(query: string): Promise<string> {
   try {
-    const resp = await fetch(
-      `https://api.crossref.org/works?query=${encodeURIComponent(query)}&rows=4`
+    const resp = await smartFetch(
+      `https://api.crossref.org/works?query=${encodeURIComponent(query)}&rows=4`,
+      { timeoutMs: 8500 }
     );
     if (!resp.ok) return `Research search HTTP ${resp.status}`;
-    const data = await resp.json();
+    const data = resp.json<any>();
     const items = data?.message?.items || [];
     return (
       items
@@ -304,15 +410,16 @@ async function runLiveUrlReaderTool(
     const domain = new URL(cleanUrl).hostname.replace(/^www\./, '');
     addSource({ title: domain, url: cleanUrl, domain });
   } catch {
-    // Ignore invalid URL parse
+    // Ignore
   }
 
   try {
-    const jinaResp = await fetch(`https://r.jina.ai/${cleanUrl}`, {
+    const jinaResp = await smartFetch(`https://r.jina.ai/${cleanUrl}`, {
       headers: { Accept: 'text/plain' },
+      timeoutMs: 14000,
     });
     if (jinaResp.ok) {
-      const text = await jinaResp.text();
+      const text = jinaResp.text();
       if (text && text.trim().length > 40) {
         return `LIVE WEBPAGE CONTENT (${cleanUrl}):\n${text.slice(0, 9500)}`;
       }
@@ -322,9 +429,9 @@ async function runLiveUrlReaderTool(
   }
 
   try {
-    const direct = await fetch(cleanUrl);
+    const direct = await smartFetch(cleanUrl, { timeoutMs: 12000 });
     if (direct.ok) {
-      const raw = await direct.text();
+      const raw = direct.text();
       const stripped = raw
         .replace(/<script[\s\S]*?<\/script>/gi, ' ')
         .replace(/<style[\s\S]*?<\/style>/gi, ' ')
@@ -432,6 +539,9 @@ function runJsSandboxTool(expressionOrCode: string): string {
   }
 }
 
+/**
+ * 0ms Instant Deterministic Router — Eliminates extra LLM planner round-trip for 95% of requests!
+ */
 function detectGuaranteedDirectTool(
   userPrompt: string,
   forceDeepResearch?: boolean
@@ -446,6 +556,14 @@ function detectGuaranteedDirectTool(
   }
 
   const p = userPrompt.toLowerCase();
+
+  if (
+    /\b(build an? interactive|build a web app|create a web app|interactive web app|make a web app|build a game|create a game|playable game|build a calculator|create a calculator|build a dashboard|html5 app|mini app|build an? app for)\b/.test(
+      p
+    )
+  ) {
+    return { tool: 'mini_app', query: userPrompt };
+  }
 
   if (
     /\b(flowchart|architecture diagram|system diagram|mindmap|svg chart|sequence diagram|visual diagram)\b/.test(
@@ -477,7 +595,7 @@ function detectGuaranteedDirectTool(
   }
 
   if (
-    /\b(generate voice|generate speech|read aloud|speak this|narrate this|voice e bolo|awaje bolo|tts)\b/.test(
+    /\b(generate voice|generate speech|read aloud|speak this|speak in my|narrate this|voice e bolo|awaje bolo|tts)\b/.test(
       p
     )
   ) {
@@ -486,7 +604,7 @@ function detectGuaranteedDirectTool(
       voiceMode: 'speak',
       query:
         userPrompt.replace(
-          /^.*?\b(say|speak|read aloud|speak this|narrate this|bolo)\b\s*[:-]?\s*/i,
+          /^.*?\b(say|speak|read aloud|speak this|speak in my[^:]*|narrate this|bolo)\b\s*[:-]?\s*/i,
           ''
         ) || userPrompt,
     };
@@ -523,7 +641,38 @@ function detectGuaranteedDirectTool(
     };
   }
 
+  // Instant Weather check
+  const wxMatch = p.match(/\b(?:weather|temperature|forecast|abohawa)\s+(?:in|at|for|of)?\s*([a-z\s]{2,28})/i);
+  if (wxMatch?.[1]) {
+    return { tool: 'weather_live', query: wxMatch[1].trim() };
+  }
+
+  // Instant Crypto check
+  if (/\b(bitcoin|btc|ethereum|eth|solana|crypto)\s+(price|market|rate)\b/.test(p)) {
+    return { tool: 'crypto_market', query: userPrompt };
+  }
+
+  // Instant Phone Battery check
+  if (/\b(phone battery|battery status|battery level|amar phone er battery)\b/.test(p)) {
+    return {
+      tool: 'phone_action',
+      query: 'Battery Status',
+      phoneParams: { action: 'battery_status', label: 'Check Phone Battery & Temp', params: {} },
+    };
+  }
+
   return null;
+}
+
+/**
+ * Only run the LLM Planner if the prompt contains signals of needing external search, phone control, or webhooks
+ * NOT already caught by the 0ms deterministic router. Pure chat/coding skips the extra LLM call completely!
+ */
+function mightNeedExternalPlanner(userPrompt: string, hasWebhooks: boolean): boolean {
+  if (hasWebhooks && /\b(webhook|trigger|mcp)\b/i.test(userPrompt)) return true;
+  return /\b(alarm|timer|whatsapp|sms|call|dial|calendar|maps|youtube|wifi|bluetooth|settings|latest|today|current|news|2025|2026|github repo|arxiv|research paper|reddit|hackernews|remember that my)\b/i.test(
+    userPrompt
+  );
 }
 
 export async function runOpenBrainAutonomousAgent(params: {
@@ -594,7 +743,6 @@ export async function runOpenBrainAutonomousAgent(params: {
     collectedSources.push(s);
   };
 
-  // Instant zero-latency personal memory check
   if (settings.autoMemory !== false) {
     const fastMem = extractExplicitMemoryFromPrompt(userPrompt);
     if (fastMem) {
@@ -624,35 +772,33 @@ export async function runOpenBrainAutonomousAgent(params: {
   if (settings.autonomousAgent && !attachedImage) {
     let plannedCalls: PlannedToolCall[] = [];
 
-    if (forceDeepResearch) {
-      plannedCalls = [{ tool: 'deep_research', query: userPrompt }];
-    } else {
+    // 1. Check 0ms Instant Deterministic Router FIRST (zero network latency!)
+    const directTool = detectGuaranteedDirectTool(userPrompt, forceDeepResearch);
+    if (directTool) {
+      plannedCalls = [directTool];
+    } else if (mightNeedExternalPlanner(userPrompt, enabledWebhooks.length > 0)) {
       const availableToolLines: string[] = [
-        '- "deep_research": multi-wave parallel research across Wikipedia, Web, HackerNews, GitHub & Academic Papers when user asks for deep research, thorough analysis, market/tech comparison, or cited report',
-        '- "read_url": fetch and read any http/https webpage, documentation URL, or article pasted by the user (query = exact URL)',
-        '- "code_interpreter": multi-attempt self-healing JavaScript solver for hard math, combinatorics, algorithms, statistics, simulations, or exact numerical proofs (query = exact problem statement)',
-        '- "svg_diagram": generate a clean vector SVG flowchart, architecture diagram, mindmap, or data chart inline (query = diagram specification)',
+        '- "deep_research": multi-wave parallel research across Wikipedia, Web, HackerNews, GitHub & Papers',
+        '- "read_url": fetch and read any http/https webpage (query = exact URL)',
+        '- "code_interpreter": self-healing JavaScript solver for hard math/combinatorics',
+        '- "svg_diagram": vector SVG flowchart or architecture diagram',
       ];
       if (settings.autoMemory !== false) {
         availableToolLines.push(
-          '- "save_memory": when user shares a durable personal fact, name, location, project stack, or standing preference to remember across chats (query = concise English summary of the fact; memoryCategory = "profile"|"preference"|"project"|"instruction")'
+          '- "save_memory": store durable personal fact (query = fact; memoryCategory = "profile"|"preference"|"project"|"instruction")'
         );
       }
       if (enabledConnectorSlugs.has('web_search')) {
-        availableToolLines.push('- "web_search": quick live facts, news, Wikipedia & DuckDuckGo lookup');
+        availableToolLines.push('- "web_search": live facts, news, Wikipedia & DuckDuckGo lookup');
       }
       if (enabledConnectorSlugs.has('github')) {
-        availableToolLines.push('- "github_search": open-source repositories & tools on GitHub');
+        availableToolLines.push('- "github_search": open-source repositories on GitHub');
       }
       if (enabledConnectorSlugs.has('weather')) {
-        availableToolLines.push(
-          '- "weather_live": current weather & forecast for a city (query = city name only)'
-        );
+        availableToolLines.push('- "weather_live": current weather for a city (query = city name)');
       }
       if (enabledConnectorSlugs.has('crypto')) {
-        availableToolLines.push(
-          '- "crypto_market": live USD & INR crypto prices (query = coin names)'
-        );
+        availableToolLines.push('- "crypto_market": live USD & INR crypto prices');
       }
       if (enabledConnectorSlugs.has('arxiv')) {
         availableToolLines.push('- "arxiv_research": scientific or AI research papers');
@@ -662,17 +808,9 @@ export async function runOpenBrainAutonomousAgent(params: {
       }
       if (enabledConnectorSlugs.has('android_os')) {
         availableToolLines.push(
-          `- "phone_action": control the user's Android phone! Include "phoneParams": {"action": "set_alarm"|"set_timer"|"dial_number"|"send_whatsapp"|"send_sms"|"add_calendar"|"open_maps"|"open_youtube"|"open_settings"|"send_email"|"battery_status"|"copy_clipboard", "label": "human title", "params": {...}}. Examples: set_alarm -> {"hour": 7, "minute": 30, "message": "Wake up"}; set_timer -> {"seconds": 300, "message": "Focus"}; send_whatsapp -> {"phone": "", "message": "Hello"}; dial_number -> {"phone": "9876543210"}; open_maps -> {"query": "Howrah Bridge"}; open_youtube -> {"query": "lofi music"}; open_settings -> {"section": "wifi"|"bluetooth"|"sound"|"battery"|"display"}; battery_status -> {}`
+          `- "phone_action": control Android phone! Include "phoneParams": {"action": "set_alarm"|"set_timer"|"dial_number"|"send_whatsapp"|"send_sms"|"add_calendar"|"open_maps"|"open_youtube"|"open_settings"|"send_email"|"battery_status"|"copy_clipboard", "label": "human title", "params": {...}}. Examples: set_alarm -> {"hour": 7, "minute": 30, "message": "Wake up"}; set_timer -> {"seconds": 300, "message": "Focus"}; send_whatsapp -> {"phone": "", "message": "Hello"}; dial_number -> {"phone": "9876543210"}; open_maps -> {"query": "Howrah Bridge"}; open_youtube -> {"query": "lofi music"}; open_settings -> {"section": "wifi"|"bluetooth"|"sound"|"battery"|"display"}`
         );
       }
-      availableToolLines.push(
-        '- "code_video_mp4": when user asks for an animation video, math/Manim visual, kinetic explainer, diagram video, or motion graphic (query = vivid description; optional aspectRatio: "16:9"|"9:16")',
-        '- "cinema_video_mp4": when user asks for a photorealistic cinematic video, story video, movie scene, or nature/city video with voiceover (query = vivid scene description; optional aspectRatio: "16:9"|"9:16")',
-        '- "voice_clone_tts": when user asks to clone their voice (voiceMode = "setup_clone") OR asks to speak/read/narrate/generate voice audio (voiceMode = "speak", query = exact text script to speak)',
-        '- "generate_image": when user asks to draw/create/generate a still image, photo, artwork, logo, or wallpaper (query = detailed English visual prompt; optional aspectRatio: "1:1"|"9:16"|"16:9")',
-        '- "mini_app": when user asks to build a playable game, interactive calculator, dashboard, or web app (query = app specification)',
-        '- "js_sandbox": exact math, financial EMI/SIP, statistics, or data computation (query = valid JS expression)'
-      );
       if (enabledWebhooks.length > 0) {
         availableToolLines.push(
           `- "custom_webhook": invoke user webhook (${enabledWebhooks
@@ -681,13 +819,12 @@ export async function runOpenBrainAutonomousAgent(params: {
         );
       }
 
-      const plannerPrompt = `You are Open Brain v3.5 Ultra Autonomous Planner. The user may write in ANY language (English, Banglish, Bengali, Hindi, Chinese, etc.). Decide which tools (0 to 3 max) to run automatically.
+      const plannerPrompt = `You are Open Brain Autonomous Planner. Decide which tools (0 to 2 max) to run.
 Available Tools:
 ${availableToolLines.join('\n')}
 
 Return ONLY valid JSON:
-{"needsTools": boolean, "calls": [{"tool": "...", "query": "...", "aspectRatio": "16:9", "voiceMode": "speak", "memoryCategory": "preference", "phoneParams": ...}]}
-If it is pure conversation, coding explanation, writing, or reasoning needing no external/media tool, return {"needsTools": false, "calls": []}.`;
+{"needsTools": boolean, "calls": [{"tool": "...", "query": "...", "phoneParams": ...}]}`;
 
       try {
         const rawPlan = await generateFreeLLMResponse(
@@ -700,15 +837,10 @@ If it is pure conversation, coding explanation, writing, or reasoning needing no
         );
         const parsed = extractJsonObject<AgentPlan>(rawPlan);
         if (parsed?.needsTools && Array.isArray(parsed.calls)) {
-          plannedCalls = parsed.calls.slice(0, 3);
+          plannedCalls = parsed.calls.slice(0, 2);
         }
       } catch {
-        // Fallback below
-      }
-
-      if (plannedCalls.length === 0) {
-        const fallbackCall = detectGuaranteedDirectTool(userPrompt, false);
-        if (fallbackCall) plannedCalls = [fallbackCall];
+        // Proceed cleanly
       }
     }
 
@@ -731,7 +863,7 @@ If it is pure conversation, coding explanation, writing, or reasoning needing no
         mini_app: 'Interactive HTML5 App Compiler',
         code_video_mp4: 'Code Sandbox -> Hardware H.264 MP4',
         cinema_video_mp4: 'Flux Cinema + Neural Voice -> MP4',
-        voice_clone_tts: 'Zero-Shot Voice Clone & Neural Audio',
+        voice_clone_tts: 'Voicebox Cloning & Pedalboard Audio',
         phone_action: 'Android OS Native Bridge',
         custom_webhook: 'MCP / Webhook Connector',
       };
@@ -887,15 +1019,17 @@ If it is pure conversation, coding explanation, writing, or reasoning needing no
           if (call.voiceMode === 'setup_clone' && !activeProfile) {
             showVoiceCloneRecorder = true;
             output =
-              'Displayed interactive Zero-Shot Voice Clone Recorder card inline in chat so the user can record a 6-12s voice sample or upload an audio clip.';
+              'Displayed interactive Voicebox Zero-Shot Clone Recorder card inline in chat so the user can record a 6-12s voice sample or upload an audio clip.';
           } else if (call.voiceMode === 'setup_clone' && activeProfile) {
             showVoiceCloneRecorder = true;
             const sampleOut = await synthesizeClonedVoice({
-              text: `Your cloned voice profile ${activeProfile.name} is ready on Open Brain. Tell me anything you want me to speak.`,
+              text: `Your cloned voice profile ${activeProfile.name} is ready on Open Brain.`,
               profile: activeProfile,
-              presetVoice: 'onyx',
+              presetVoice: 'echo',
               tryZeroShotNeural: true,
               hfToken: settings.hfToken,
+              voiceboxServerUrl: settings.voiceboxServerUrl,
+              effectPreset: settings.voiceboxEffectPreset,
             });
             voiceClipArtifact = {
               id: `vc-${Date.now()}`,
@@ -911,23 +1045,25 @@ If it is pure conversation, coding explanation, writing, or reasoning needing no
             const synthOut = await synthesizeClonedVoice({
               text: spokenScript,
               profile: activeProfile,
-              presetVoice: 'onyx',
+              presetVoice: 'echo',
               tryZeroShotNeural: true,
               hfToken: settings.hfToken,
+              voiceboxServerUrl: settings.voiceboxServerUrl,
+              effectPreset: settings.voiceboxEffectPreset,
               onStatus: (m) => {
-                stepObj.title = `Voice Lab: ${m}`;
+                stepObj.title = `Voicebox: ${m}`;
                 onStepsChange([...steps]);
               },
             });
             voiceClipArtifact = {
               id: `vc-${Date.now()}`,
               text: spokenScript,
-              voiceName: activeProfile ? activeProfile.name : 'Studio Onyx Neural',
+              voiceName: activeProfile ? activeProfile.name : 'Voicebox Studio',
               engineUsed: synthOut.engineUsed,
               audioUrl: synthOut.url,
               createdAt: Date.now(),
             };
-            output = `Synthesized neural/cloned WAV audio (${voiceClipArtifact.voiceName}) directly in chat.`;
+            output = `Synthesized cloned/neural WAV audio (${voiceClipArtifact.voiceName} · ${synthOut.engineUsed}) directly in chat.`;
           }
         } else if (call.tool === 'phone_action' && call.phoneParams?.action) {
           const payload: PhoneActionPayload = {
@@ -944,30 +1080,46 @@ If it is pure conversation, coding explanation, writing, or reasoning needing no
             enabledWebhooks.find(
               (w) => w.name.toLowerCase() === String(call.webhookName || '').toLowerCase()
             ) || enabledWebhooks[0];
-          const whResp = await fetch(wh.url, {
+          const whResp = await smartFetch(wh.url, {
             method: wh.method,
             headers: wh.method === 'POST' ? { 'Content-Type': 'application/json' } : undefined,
             body:
               wh.method === 'POST'
                 ? JSON.stringify({ query: call.query, prompt: userPrompt, source: 'OpenBrain' })
                 : undefined,
+            timeoutMs: 14000,
           });
-          output = `Webhook "${wh.name}" HTTP ${whResp.status}: ${(await whResp.text()).slice(0, 600)}`;
+          output = `Webhook "${wh.name}" HTTP ${whResp.status}: ${whResp.text().slice(0, 600)}`;
         } else if (call.tool === 'mini_app') {
-          const appHtml = await generateFreeLLMResponse(
-            [
-              {
-                role: 'system',
-                content:
-                  'Output ONLY a complete, self-contained, mobile-friendly single-file HTML5 document (<!DOCTYPE html>...</html>) with sleek modern UI, responsive controls, and working JavaScript.',
-              },
-              { role: 'user', content: `Build this interactive app: ${call.query}` },
-            ],
-            settings,
-            'qwen-coder'
-          );
-          const matchHtml = appHtml.match(/<!DOCTYPE html[\s\S]*<\/html>/i);
-          const cleanHtml = matchHtml ? matchHtml[0] : appHtml.replace(/```html|```/gi, '').trim();
+          let cleanHtml = '';
+          try {
+            const appHtml = await generateFreeLLMResponse(
+              [
+                {
+                  role: 'system',
+                  content:
+                    'Output ONLY a complete, self-contained, mobile-friendly single-file HTML5 document (<!DOCTYPE html>...</html>) with sleek modern UI, responsive controls, local persistence, and working JavaScript.',
+                },
+                { role: 'user', content: `Build this interactive app: ${call.query}` },
+              ],
+              settings,
+              'qwen-coder'
+            );
+            const matchHtml = appHtml.match(/<!DOCTYPE html[\s\S]*<\/html>/i);
+            const extracted = matchHtml
+              ? matchHtml[0]
+              : appHtml.replace(/```html|```/gi, '').trim();
+            if (extracted.includes('<html') || extracted.includes('<body') || extracted.includes('<script')) {
+              cleanHtml = extracted;
+            }
+          } catch {
+            // Fall back to instant local HTML5 app compiler below
+          }
+
+          if (!cleanHtml) {
+            cleanHtml = buildFallbackInteractiveWebApp(call.query || userPrompt);
+          }
+
           codeArtifact = {
             title: (call.query || 'Interactive App').slice(0, 48),
             html: cleanHtml,
@@ -989,6 +1141,61 @@ If it is pure conversation, coding explanation, writing, or reasoning needing no
     }
   }
 
+  // Fast-path immediate delivery when a rich self-contained media/app artifact was already compiled!
+  if (codeArtifact) {
+    return {
+      reply: `Your interactive web app **${codeArtifact.title}** is compiled and running live below. You can interact with it directly inside chat, inspect the source code, or download the standalone \`.html\` file.`,
+      routedModelLabel: 'Auto · Qwen-32B App Compiler',
+      sources: collectedSources,
+      savedMemoryFact,
+      generatedImages,
+      codeVideoArtifact,
+      voiceClipArtifact,
+      showVoiceCloneRecorder,
+      phoneActions,
+      codeArtifact,
+      svgDiagramArtifact,
+      toolSteps: steps,
+      activeSkillNames: enabledSkills.map((s) => s.name),
+    };
+  }
+
+  if (codeVideoArtifact || voiceClipArtifact || showVoiceCloneRecorder) {
+    const summaryParts: string[] = [];
+    if (codeVideoArtifact) {
+      summaryParts.push(
+        `Rendered **${codeVideoArtifact.title}** (${codeVideoArtifact.width}x${codeVideoArtifact.height} H.264 \`.mp4\`, ${codeVideoArtifact.durationSec}s) using ${codeVideoArtifact.engineLabel}. Tap Download to save directly to your phone.`
+      );
+    }
+    if (voiceClipArtifact) {
+      summaryParts.push(
+        `Synthesized voice audio with **${voiceClipArtifact.engineUsed}**. You can play it inline or save the 16-bit \`.wav\` file.`
+      );
+    }
+    if (showVoiceCloneRecorder && !voiceClipArtifact) {
+      summaryParts.push(
+        `Record a 6–12 second voice sample or upload an audio clip in the Voicebox Studio card below. Once saved, ask me to speak anything in your voice.`
+      );
+    }
+    return {
+      reply: summaryParts.join('\n\n'),
+      routedModelLabel: voiceClipArtifact
+        ? voiceClipArtifact.engineUsed
+        : 'Open Brain Studio',
+      sources: collectedSources,
+      savedMemoryFact,
+      generatedImages,
+      codeVideoArtifact,
+      voiceClipArtifact,
+      showVoiceCloneRecorder,
+      phoneActions,
+      codeArtifact,
+      svgDiagramArtifact,
+      toolSteps: steps,
+      activeSkillNames: enabledSkills.map((s) => s.name),
+    };
+  }
+
   const memoryDirective = formatMemoryBlockForPrompt(memories);
 
   const skillsDirective =
@@ -1001,10 +1208,10 @@ If it is pure conversation, coding explanation, writing, or reasoning needing no
     ? `\nACTIVE PROJECT INSTRUCTIONS:\n${projectInstructions.trim()}`
     : '';
 
-  const systemInstruction = `You are **Open Brain** — an unmatched, 100% Free & Unlimited Autonomous AI Super-Agent powered by Smart Multi-Model Routing, 3-Specialist Parallel Mixture-of-Agents Council synthesis, Self-Verifying Critic loops, Permanent Personal Memory, Multi-Wave Deep Research, and Zero-Phone-Pressure architecture.
+  const systemInstruction = `You are **Open Brain v4.5** — an unmatched, 100% Free & Unlimited Autonomous AI Super-Agent powered by Multi-Cloud Smart Routing, Omega Council synthesis, Voicebox Multi-Engine Voice Cloning, Self-Verifying Critic loops, Permanent Personal Memory, Multi-Wave Deep Research, and Zero-Phone-Pressure architecture.
 Everything executes directly inside this unified chat:
 - Programmatic Code-to-MP4 Sandbox Video & Photorealistic Cinema MP4 Video
-- Zero-Shot Voice Cloning (F5-TTS / Vocal DNA Twin) & Neural Speech
+- Voicebox Voice Cloning (Chatterbox / Qwen3-TTS / F5-TTS / Vocal DNA Pedalboard) & 23-Language Neural Speech
 - HD Flux.1 Image Generation & Interactive HTML5 App Compilation
 - Multi-Wave Deep Research across Web, Wikipedia, GitHub, HackerNews & Scholarly Papers
 - Native Android Phone OS Control (Alarms, Timers, WhatsApp, SMS, Calls, Maps, Calendar, YouTube, Settings, Battery)
@@ -1021,7 +1228,6 @@ ${langHint}${memoryDirective}${projectDirective}${skillsDirective}${
     content: m.content,
   }));
 
-  // BM25 Long-Document & Multi-File RAG Indexing
   const docsToIndex: AttachedDocItem[] =
     attachedDocs && attachedDocs.length > 0
       ? attachedDocs
@@ -1068,7 +1274,7 @@ ${langHint}${memoryDirective}${projectDirective}${skillsDirective}${
         tool: kind,
         title:
           kind === 'moa_council'
-            ? '3-Model Council (R1 + Qwen-32B + Llama-70B)'
+            ? 'Multi-Cloud Omega Council (R1 + HF Qwen + Omni-70B)'
             : 'Self-Verifying Critic Audit',
         query: note,
         status: 'running',

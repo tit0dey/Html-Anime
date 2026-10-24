@@ -24,6 +24,7 @@ import android.provider.CalendarContract;
 import android.provider.MediaStore;
 import android.provider.Settings;
 import android.speech.tts.TextToSpeech;
+import android.speech.tts.UtteranceProgressListener;
 import android.util.Base64;
 import android.view.View;
 import android.view.ViewGroup;
@@ -34,29 +35,46 @@ import android.webkit.PermissionRequest;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
 import android.widget.Toast;
 
+import org.json.JSONObject;
+
+import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class MainActivity extends Activity {
 
     private static final int REQ_FILE_CHOOSER = 2001;
     private static final int REQ_RUNTIME_PERMS = 2002;
+    private static final String VIRTUAL_HOST = "openbrain.app";
 
     private WebView webView;
     private ValueCallback<Uri[]> filePathCallback;
     private PermissionRequest pendingWebPermission;
     private TextToSpeech nativeTts;
     private boolean ttsReady = false;
+    private final ExecutorService httpPool = Executors.newCachedThreadPool();
+    private final ConcurrentHashMap<String, File> pendingTtsFiles = new ConcurrentHashMap<String, File>();
 
     private void applySystemBarTheme(boolean isDark) {
         Window window = getWindow();
@@ -86,6 +104,51 @@ public class MainActivity extends Activity {
         }
     }
 
+    private String guessMimeType(String path) {
+        String p = path.toLowerCase(Locale.US);
+        if (p.endsWith(".html") || p.endsWith(".htm")) return "text/html";
+        if (p.endsWith(".js") || p.endsWith(".mjs")) return "application/javascript";
+        if (p.endsWith(".css")) return "text/css";
+        if (p.endsWith(".json")) return "application/json";
+        if (p.endsWith(".svg")) return "image/svg+xml";
+        if (p.endsWith(".png")) return "image/png";
+        if (p.endsWith(".jpg") || p.endsWith(".jpeg")) return "image/jpeg";
+        if (p.endsWith(".webp")) return "image/webp";
+        if (p.endsWith(".wav")) return "audio/wav";
+        if (p.endsWith(".mp3")) return "audio/mpeg";
+        if (p.endsWith(".mp4")) return "video/mp4";
+        return "application/octet-stream";
+    }
+
+    private byte[] readFileBytes(File file) throws Exception {
+        FileInputStream fis = new FileInputStream(file);
+        try {
+            ByteArrayOutputStream bos = new ByteArrayOutputStream();
+            byte[] buf = new byte[8192];
+            int n;
+            while ((n = fis.read(buf)) != -1) {
+                bos.write(buf, 0, n);
+            }
+            return bos.toByteArray();
+        } finally {
+            fis.close();
+        }
+    }
+
+    private void dispatchJsCallback(final String jsCode) {
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                if (webView != null) {
+                    try {
+                        webView.evaluateJavascript(jsCode, null);
+                    } catch (Exception ignored) {
+                    }
+                }
+            }
+        });
+    }
+
     @SuppressLint({"SetJavaScriptEnabled", "AddJavascriptInterface"})
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -99,6 +162,56 @@ public class MainActivity extends Activity {
                 if (status == TextToSpeech.SUCCESS) {
                     ttsReady = true;
                     nativeTts.setLanguage(Locale.US);
+                    nativeTts.setOnUtteranceProgressListener(new UtteranceProgressListener() {
+                        @Override
+                        public void onStart(String utteranceId) {
+                        }
+
+                        @Override
+                        public void onDone(String utteranceId) {
+                            File wavFile = pendingTtsFiles.remove(utteranceId);
+                            if (wavFile == null) return;
+                            try {
+                                byte[] bytes = readFileBytes(wavFile);
+                                wavFile.delete();
+                                JSONObject res = new JSONObject();
+                                res.put("ok", true);
+                                res.put("audioBase64", Base64.encodeToString(bytes, Base64.NO_WRAP));
+                                dispatchJsCallback(
+                                        "window.__obTtsWavDone && window.__obTtsWavDone("
+                                                + JSONObject.quote(utteranceId) + "," + res.toString() + ")"
+                                );
+                            } catch (Exception e) {
+                                wavFile.delete();
+                                try {
+                                    JSONObject err = new JSONObject();
+                                    err.put("ok", false);
+                                    err.put("error", String.valueOf(e.getMessage()));
+                                    dispatchJsCallback(
+                                            "window.__obTtsWavDone && window.__obTtsWavDone("
+                                                    + JSONObject.quote(utteranceId) + "," + err.toString() + ")"
+                                    );
+                                } catch (Exception ignored) {
+                                }
+                            }
+                        }
+
+                        @Override
+                        public void onError(String utteranceId) {
+                            File wavFile = pendingTtsFiles.remove(utteranceId);
+                            if (wavFile != null) wavFile.delete();
+                            try {
+                                JSONObject err = new JSONObject();
+                                err.put("ok", false);
+                                err.put("error", "Native TTS utterance error");
+                                dispatchJsCallback(
+                                        "window.__obTtsWavDone && window.__obTtsWavDone("
+                                                + JSONObject.quote(utteranceId) + "," + err.toString() + ")"
+                                );
+                            } catch (Exception ignored) {
+                            }
+                        }
+                    });
                 }
             }
         });
@@ -129,10 +242,45 @@ public class MainActivity extends Activity {
 
         webView.setWebViewClient(new WebViewClient() {
             @Override
+            public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+                Uri uri = request.getUrl();
+                if (uri != null && VIRTUAL_HOST.equalsIgnoreCase(uri.getHost())) {
+                    try {
+                        String rawPath = uri.getPath();
+                        if (rawPath == null || rawPath.isEmpty() || "/".equals(rawPath)) {
+                            rawPath = "/index.html";
+                        }
+                        String assetPath = "public" + rawPath;
+                        InputStream is = getAssets().open(assetPath);
+                        String mime = guessMimeType(assetPath);
+                        Map<String, String> headers = new HashMap<String, String>();
+                        headers.put("Access-Control-Allow-Origin", "*");
+                        headers.put("Cache-Control", "no-cache");
+                        return new WebResourceResponse(mime, "UTF-8", 200, "OK", headers, is);
+                    } catch (Exception ignored) {
+                        try {
+                            InputStream fallback = getAssets().open("public/index.html");
+                            Map<String, String> headers = new HashMap<String, String>();
+                            headers.put("Access-Control-Allow-Origin", "*");
+                            return new WebResourceResponse("text/html", "UTF-8", 200, "OK", headers, fallback);
+                        } catch (Exception ignored2) {
+                        }
+                    }
+                }
+                return super.shouldInterceptRequest(view, request);
+            }
+
+            @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 Uri uri = request.getUrl();
+                if (uri == null) return false;
                 String scheme = uri.getScheme();
-                if ("file".equals(scheme) || "data".equals(scheme) || "blob".equals(scheme)) {
+                String host = uri.getHost();
+                if (VIRTUAL_HOST.equalsIgnoreCase(host)
+                        || "file".equals(scheme)
+                        || "data".equals(scheme)
+                        || "blob".equals(scheme)
+                        || "about".equals(scheme)) {
                     return false;
                 }
                 try {
@@ -187,6 +335,7 @@ public class MainActivity extends Activity {
                     Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
                     intent.addCategory(Intent.CATEGORY_OPENABLE);
                     intent.setType("*/*");
+                    intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
                     startActivityForResult(Intent.createChooser(intent, "Select File"), REQ_FILE_CHOOSER);
                     return true;
                 } catch (Exception e) {
@@ -215,7 +364,8 @@ public class MainActivity extends Activity {
         ));
         setContentView(root);
 
-        webView.loadUrl("file:///android_asset/public/index.html");
+        // Load from true HTTPS virtual origin (never file://!) for full SecureContext, WebCodecs & CORS
+        webView.loadUrl("https://" + VIRTUAL_HOST + "/index.html");
     }
 
     // Zero-Phone-Pressure Power Guard: 0% CPU & 0% Battery Drain when minimized!
@@ -271,8 +421,16 @@ public class MainActivity extends Activity {
         if (requestCode == REQ_FILE_CHOOSER) {
             if (filePathCallback != null) {
                 Uri[] results = null;
-                if (resultCode == Activity.RESULT_OK && data != null && data.getData() != null) {
-                    results = new Uri[]{data.getData()};
+                if (resultCode == Activity.RESULT_OK && data != null) {
+                    if (data.getClipData() != null) {
+                        int count = data.getClipData().getItemCount();
+                        results = new Uri[count];
+                        for (int i = 0; i < count; i++) {
+                            results[i] = data.getClipData().getItemAt(i).getUri();
+                        }
+                    } else if (data.getData() != null) {
+                        results = new Uri[]{data.getData()};
+                    }
                 }
                 filePathCallback.onReceiveValue(results);
                 filePathCallback = null;
@@ -305,6 +463,7 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        httpPool.shutdownNow();
         if (nativeTts != null) {
             nativeTts.stop();
             nativeTts.shutdown();
@@ -316,6 +475,170 @@ public class MainActivity extends Activity {
     }
 
     public class OpenBrainBridge {
+
+        @JavascriptInterface
+        public void httpRequestAsync(
+                final String reqId,
+                final String urlStr,
+                final String method,
+                final String headersJson,
+                final String bodyStr,
+                final int timeoutMs
+        ) {
+            httpPool.execute(new Runnable() {
+                @Override
+                public void run() {
+                    HttpURLConnection conn = null;
+                    try {
+                        URL url = new URL(urlStr);
+                        conn = (HttpURLConnection) url.openConnection();
+                        conn.setInstanceFollowRedirects(true);
+                        int to = timeoutMs > 1000 ? Math.min(timeoutMs, 45000) : 16000;
+                        conn.setConnectTimeout(Math.min(10000, to));
+                        conn.setReadTimeout(to);
+
+                        String m = (method == null || method.trim().isEmpty())
+                                ? "GET"
+                                : method.trim().toUpperCase(Locale.US);
+                        conn.setRequestMethod(m);
+
+                        conn.setRequestProperty(
+                                "User-Agent",
+                                "Mozilla/5.0 (Linux; Android 14; OpenBrain/4.5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36"
+                        );
+                        conn.setRequestProperty("Accept", "*/*");
+                        conn.setRequestProperty("Referer", "https://openbrain.app/");
+
+                        if (headersJson != null && !headersJson.trim().isEmpty()) {
+                            JSONObject hdrs = new JSONObject(headersJson);
+                            Iterator<String> keys = hdrs.keys();
+                            while (keys.hasNext()) {
+                                String k = keys.next();
+                                String v = hdrs.optString(k, "");
+                                if (!v.isEmpty()) {
+                                    conn.setRequestProperty(k, v);
+                                }
+                            }
+                        }
+
+                        if (("POST".equals(m) || "PUT".equals(m) || "PATCH".equals(m))
+                                && bodyStr != null && !bodyStr.isEmpty()) {
+                            conn.setDoOutput(true);
+                            byte[] outBytes = bodyStr.getBytes("UTF-8");
+                            OutputStream os = conn.getOutputStream();
+                            os.write(outBytes);
+                            os.flush();
+                            os.close();
+                        }
+
+                        int status = conn.getResponseCode();
+                        String contentType = conn.getContentType();
+                        InputStream is = (status >= 200 && status < 400)
+                                ? conn.getInputStream()
+                                : conn.getErrorStream();
+
+                        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+                        if (is != null) {
+                            byte[] buf = new byte[8192];
+                            int n;
+                            int total = 0;
+                            int maxBytes = 12 * 1024 * 1024; // 12MB RAM guard
+                            while ((n = is.read(buf)) != -1) {
+                                if (total + n > maxBytes) break;
+                                bos.write(buf, 0, n);
+                                total += n;
+                            }
+                            is.close();
+                        }
+
+                        byte[] rawBytes = bos.toByteArray();
+                        JSONObject res = new JSONObject();
+                        res.put("ok", status >= 200 && status < 300);
+                        res.put("status", status);
+                        res.put("contentType", contentType != null ? contentType : "");
+                        res.put("bodyBase64", Base64.encodeToString(rawBytes, Base64.NO_WRAP));
+
+                        dispatchJsCallback(
+                                "window.__obHttpDone && window.__obHttpDone("
+                                        + JSONObject.quote(reqId) + "," + res.toString() + ")"
+                        );
+                    } catch (Exception e) {
+                        try {
+                            JSONObject err = new JSONObject();
+                            err.put("ok", false);
+                            err.put("status", 0);
+                            err.put("error", String.valueOf(e.getMessage()));
+                            dispatchJsCallback(
+                                    "window.__obHttpDone && window.__obHttpDone("
+                                            + JSONObject.quote(reqId) + "," + err.toString() + ")"
+                            );
+                        } catch (Exception ignored) {
+                        }
+                    } finally {
+                        if (conn != null) {
+                            conn.disconnect();
+                        }
+                    }
+                }
+            });
+        }
+
+        @JavascriptInterface
+        public void synthesizeNativeWavAsync(final String reqId, final String text, final String langTag) {
+            if (!ttsReady || nativeTts == null || Build.VERSION.SDK_INT < 21) {
+                try {
+                    JSONObject err = new JSONObject();
+                    err.put("ok", false);
+                    err.put("error", "Native Android TTS engine initializing");
+                    dispatchJsCallback(
+                            "window.__obTtsWavDone && window.__obTtsWavDone("
+                                    + JSONObject.quote(reqId) + "," + err.toString() + ")"
+                    );
+                } catch (Exception ignored) {
+                }
+                return;
+            }
+            try {
+                if (langTag != null && langTag.startsWith("bn")) {
+                    nativeTts.setLanguage(new Locale("bn", "IN"));
+                } else if (langTag != null && langTag.startsWith("hi")) {
+                    nativeTts.setLanguage(new Locale("hi", "IN"));
+                } else {
+                    int r = nativeTts.setLanguage(new Locale("en", "IN"));
+                    if (r == TextToSpeech.LANG_MISSING_DATA || r == TextToSpeech.LANG_NOT_SUPPORTED) {
+                        nativeTts.setLanguage(Locale.US);
+                    }
+                }
+                String safeId = reqId.replaceAll("[^a-zA-Z0-9_-]", "");
+                File outWav = new File(getCacheDir(), "ob_tts_" + safeId + ".wav");
+                pendingTtsFiles.put(reqId, outWav);
+                Bundle params = new Bundle();
+                int res = nativeTts.synthesizeToFile(text, params, outWav, reqId);
+                if (res != TextToSpeech.SUCCESS) {
+                    pendingTtsFiles.remove(reqId);
+                    outWav.delete();
+                    JSONObject err = new JSONObject();
+                    err.put("ok", false);
+                    err.put("error", "Native synthesizeToFile returned " + res);
+                    dispatchJsCallback(
+                            "window.__obTtsWavDone && window.__obTtsWavDone("
+                                    + JSONObject.quote(reqId) + "," + err.toString() + ")"
+                    );
+                }
+            } catch (Exception e) {
+                pendingTtsFiles.remove(reqId);
+                try {
+                    JSONObject err = new JSONObject();
+                    err.put("ok", false);
+                    err.put("error", String.valueOf(e.getMessage()));
+                    dispatchJsCallback(
+                            "window.__obTtsWavDone && window.__obTtsWavDone("
+                                    + JSONObject.quote(reqId) + "," + err.toString() + ")"
+                    );
+                } catch (Exception ignored) {
+                }
+            }
+        }
 
         @JavascriptInterface
         public void showToast(final String message) {
@@ -356,6 +679,8 @@ public class MainActivity extends Activity {
             try {
                 if (langTag != null && langTag.startsWith("bn")) {
                     nativeTts.setLanguage(new Locale("bn", "IN"));
+                } else if (langTag != null && langTag.startsWith("hi")) {
+                    nativeTts.setLanguage(new Locale("hi", "IN"));
                 } else {
                     nativeTts.setLanguage(new Locale("en", "IN"));
                 }

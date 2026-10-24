@@ -267,4 +267,6 @@ export interface AppSettings {
   hfToken: string;
   githubToken: string;
   ollamaUrl: string;
+  voiceboxServerUrl?: string;
+  voiceboxEffectPreset?: 'natural' | 'broadcast' | 'deep' | 'echo' | 'radio';
 }
